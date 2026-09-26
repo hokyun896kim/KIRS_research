@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f9;
+  --foreground: #15181d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui,
+    -apple-system, sans-serif;
+}
+
+/* AI 자동분석 마크다운 출력 */
+.md {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #1f2937;
+  word-break: break-word;
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-weight: 700;
+  margin: 16px 0 6px;
+  line-height: 1.35;
+}
+.md h1 {
+  font-size: 17px;
+}
+.md h2 {
+  font-size: 15px;
+}
+.md h3 {
+  font-size: 14px;
+}
+.md p {
+  margin: 6px 0;
+}
+.md ul,
+.md ol {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 2px 0;
+}
+.md strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+.md code {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 12px 0;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 12px;
+}
+.md th,
+.md td {
+  border: 1px solid #e2e8f0;
+  padding: 4px 8px;
+  text-align: left;
+}
+.md th {
+  background: #f8fafc;
+}
+.md blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 10px;
+  color: #475569;
+  margin: 8px 0;
+}
