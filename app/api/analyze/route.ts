@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { fetchPdf, extractPdfText, detectAuthors, isAllowedPdfUrl } from "@/lib/kirs";
-import { matchProfile, counterProfile } from "@/lib/profiles";
+import { isAllowedPdfUrl } from "@/lib/kirs";
+import { counterProfile, matchProfile } from "@/lib/profiles";
 import { classifySector } from "@/lib/sector";
-import { buildPrompt, buildCounterPrompt } from "@/lib/prompt";
+import { buildPrompt, buildCounterPrompt, buildComparePrompt } from "@/lib/prompt";
 import { getGuideline } from "@/lib/guideline-loader";
+import { loadReport, metaFrom, type ReportMeta } from "@/lib/report-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,58 +17,60 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024;
 // maxDuration(300초) 전에 스스로 끊어서 504 대신 "여기까지 분석" 안내를 남긴다.
 const SOFT_DEADLINE_MS = 280_000;
 
-type Body = {
-  url?: string;
-  name?: string;
-  code?: string | null;
-  title?: string;
-  date?: string;
-  author?: string;
-  mode?: "full" | "trade" | "counter";
+type Mode = "full" | "trade" | "counter" | "compare";
+type Side = Partial<ReportMeta> & { url?: string };
+type Body = Side & {
+  mode?: Mode;
   lens?: string; // 반론모드 렌즈 애널 이름
+  prev?: Side; // 비교모드: 이전 리포트
 };
 
 export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as Body;
+  const mode: Mode = b.mode === "trade" || b.mode === "counter" || b.mode === "compare" ? b.mode : "full";
   if (!b.url) return NextResponse.json({ error: "url required" }, { status: 400 });
-  if (!isAllowedPdfUrl(b.url)) return NextResponse.json({ error: "domain not allowed" }, { status: 400 });
+  if (mode === "compare" && !b.prev?.url) return NextResponse.json({ error: "prev required" }, { status: 400 });
+  if (!isAllowedPdfUrl(b.url) || (b.prev?.url && !isAllowedPdfUrl(b.prev.url)))
+    return NextResponse.json({ error: "domain not allowed" }, { status: 400 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
 
-  const mode = b.mode === "trade" || b.mode === "counter" ? b.mode : "full";
-  const report = {
-    name: b.name ?? "",
-    code: b.code || null,
-    title: b.title ?? "",
-    date: b.date ?? "",
-    author: b.author ?? "",
-  };
+  const report = metaFrom((k) => b[k as keyof ReportMeta] as string | null | undefined);
 
   let prompt: string;
-  let pdfBase64: string | null = null;
+  let pdfs: { data: string; title: string }[] = [];
   try {
-    const buf = await fetchPdf(b.url);
-    if (buf.length <= MAX_PDF_BYTES) pdfBase64 = buf.toString("base64");
-    const { text } = await extractPdfText(buf);
-    const { analyst, ra } = detectAuthors(text);
-    const profile = matchProfile(analyst ?? report.author);
-    const base = {
-      guideline: getGuideline(),
-      report,
-      analyst,
-      ra,
-      profile,
-      raProfile: ra ? matchProfile(ra) : undefined,
-      pdfText: text,
-      sector: classifySector(report.name, report.title).label,
-      attachedPdf: pdfBase64 != null,
-    };
-    prompt =
-      mode === "counter"
-        ? buildCounterPrompt({
-            ...base,
-            lens: matchProfile(b.lens) ?? counterProfile(profile, [analyst, ra].filter((x): x is string => !!x)),
-          })
-        : buildPrompt({ ...base, mode });
+    const cur = await loadReport(b.url, report);
+    if (mode === "compare") {
+      const prevMeta = metaFrom((k) => b.prev?.[k as keyof ReportMeta] as string | null | undefined);
+      const prev = await loadReport(b.prev!.url!, prevMeta);
+      const attach = cur.buf.length + prev.buf.length <= MAX_PDF_BYTES;
+      if (attach)
+        pdfs = [
+          { data: cur.buf.toString("base64"), title: `이번 리포트 ${cur.report.date} — ${cur.report.title}` },
+          { data: prev.buf.toString("base64"), title: `이전 리포트 ${prev.report.date} — ${prev.report.title}` },
+        ];
+      const side = (r: typeof cur) => ({ report: r.report, analyst: r.analyst, profile: r.profile, pdfText: r.text });
+      prompt = buildComparePrompt({ current: side(cur), previous: side(prev), attachedPdf: attach });
+    } else {
+      if (cur.buf.length <= MAX_PDF_BYTES)
+        pdfs = [{ data: cur.buf.toString("base64"), title: `${report.name} — ${report.title}` }];
+      const base = {
+        guideline: getGuideline(),
+        report,
+        analyst: cur.analyst,
+        ra: cur.ra,
+        profile: cur.profile,
+        raProfile: cur.raProfile,
+        pdfText: cur.text,
+        sector: classifySector(report.name, report.title).label,
+        attachedPdf: pdfs.length > 0,
+      };
+      const exclude = [cur.analyst, cur.ra].filter((x): x is string => !!x);
+      prompt =
+        mode === "counter"
+          ? buildCounterPrompt({ ...base, lens: matchProfile(b.lens) ?? counterProfile(cur.profile, exclude) })
+          : buildPrompt({ ...base, mode });
+    }
   } catch (e) {
     return NextResponse.json({ error: "extract failed", message: (e as Error).message }, { status: 502 });
   }
@@ -81,15 +84,11 @@ export async function POST(req: NextRequest) {
       {
         role: "user",
         content: [
-          ...(pdfBase64
-            ? [
-                {
-                  type: "document" as const,
-                  source: { type: "base64" as const, media_type: "application/pdf" as const, data: pdfBase64 },
-                  title: `${report.name} — ${report.title}`,
-                },
-              ]
-            : []),
+          ...pdfs.map((p) => ({
+            type: "document" as const,
+            source: { type: "base64" as const, media_type: "application/pdf" as const, data: p.data },
+            title: p.title,
+          })),
           { type: "text" as const, text: prompt },
         ],
       },

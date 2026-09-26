@@ -7,20 +7,44 @@ import type { Report, ExtractResponse } from "@/lib/types";
 import AnalystCard from "./AnalystCard";
 import { PROFILES } from "@/lib/profiles";
 
-type Mode = "full" | "trade" | "counter";
+type Mode = "full" | "trade" | "counter" | "compare";
 
 const MODE_LABEL: Record<Mode, string> = {
   full: "풀모드 (모듈 1~5·7·8)",
   trade: "매매모드 (+모듈 6·웹검색)",
   counter: "반론모드 (반대 렌즈)",
+  compare: "비교모드 (이전 리포트)",
 };
 
-export default function ReportDetail({ report, onClose }: { report: Report; onClose: () => void }) {
+// 같은 종목의 이전 리포트: 발간일이 빠르거나, 같은 날이면 번호가 작은 것
+function olderThan(list: Report[], cur: Report): Report[] {
+  return list.filter(
+    (r) => r.pdfUrl && (r.date < cur.date || (r.date === cur.date && r.no !== cur.no && Number(r.no) < Number(cur.no)))
+  );
+}
+
+export default function ReportDetail({
+  report,
+  onClose,
+  onOpenReport,
+}: {
+  report: Report;
+  onClose: () => void;
+  onOpenReport?: (r: Report) => void;
+}) {
   const [data, setData] = useState<ExtractResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<Mode>("full");
   const [lensLoading, setLensLoading] = useState(false);
+
+  // 종목 이력 · 비교모드
+  const [history, setHistory] = useState<Report[] | null>(null);
+  const [historyErr, setHistoryErr] = useState<string | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [prevNo, setPrevNo] = useState<string | null>(null);
+  const [comparePrompt, setComparePrompt] = useState<string | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
   const [tab, setTab] = useState<"prompt" | "ai">("prompt");
   const [copied, setCopied] = useState(false);
 
@@ -72,7 +96,72 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
     setAiErr(null);
     abortRef.current?.abort();
     setAiLoading(false);
-  }, [mode]);
+  }, [mode, prevNo]);
+
+  // 종목 이력 (전체 목록 색인에서 같은 종목) — 첫 조회는 색인 생성으로 20초쯤 걸릴 수 있음
+  useEffect(() => {
+    let alive = true;
+    setHistory(null);
+    setHistoryErr(null);
+    setPrevNo(null);
+    setComparePrompt(null);
+    setShowAllHistory(false);
+    const qs = new URLSearchParams({ code: report.code ?? "", name: report.name });
+    fetch(`/api/history?${qs.toString()}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        return j.reports as Report[];
+      })
+      .then((list) => {
+        if (!alive) return;
+        setHistory(list);
+        setPrevNo(olderThan(list, report)[0]?.no ?? null);
+      })
+      .catch((e) => alive && setHistoryErr(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [report]);
+
+  const olderReports = history ? olderThan(history, report) : [];
+  const prevReport = olderReports.find((r) => r.no === prevNo) ?? null;
+
+  // 비교모드 복사용 프롬프트는 비교모드를 열 때만 받는다 (PDF 두 개를 받아야 해서)
+  useEffect(() => {
+    if (mode !== "compare" || !prevReport?.pdfUrl || !report.pdfUrl) return;
+    let alive = true;
+    setComparePrompt(null);
+    setCompareLoading(true);
+    const qs = new URLSearchParams({
+      url: report.pdfUrl,
+      name: report.name,
+      code: report.code ?? "",
+      title: report.title,
+      date: report.date,
+      author: report.author,
+      prevUrl: prevReport.pdfUrl,
+      prevName: prevReport.name,
+      prevCode: prevReport.code ?? "",
+      prevTitle: prevReport.title,
+      prevDate: prevReport.date,
+      prevAuthor: prevReport.author,
+    });
+    fetch(`/api/compare?${qs.toString()}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        return j.promptCompare as string;
+      })
+      .then((p) => alive && setComparePrompt(p))
+      .catch((e) => alive && setAiErr(e.message))
+      .finally(() => alive && setCompareLoading(false));
+    return () => {
+      alive = false;
+    };
+    // prevReport는 history·prevNo에서 파생
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, prevNo, history, report]);
 
   // 반론 렌즈를 바꾸면 해당 렌즈의 반론 프롬프트만 다시 받아온다
   async function changeLens(name: string) {
@@ -106,7 +195,9 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
       ? data.promptFull
       : mode === "trade"
         ? data.promptTrade
-        : data.promptCounter
+        : mode === "counter"
+          ? data.promptCounter
+          : (comparePrompt ?? "")
     : "";
 
   async function copy() {
@@ -143,6 +234,7 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
           author: report.author,
           mode,
           ...(mode === "counter" && data ? { lens: data.counterLens.name } : {}),
+          ...(mode === "compare" && prevReport ? { prev: { ...prevReport, url: prevReport.pdfUrl } } : {}),
         }),
       });
       setAiModel(res.headers.get("X-Analyze-Model"));
@@ -235,13 +327,56 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                 {data.ra && <span>· RA {data.ra}</span>}
               </div>
 
+              {/* 종목 리포트 이력 */}
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <span className="font-semibold text-slate-700">
+                    📚 이 종목 KIRS 리포트 이력{history ? ` (${history.length}건)` : ""}
+                  </span>
+                  {history && history.length > 4 && (
+                    <button onClick={() => setShowAllHistory((v) => !v)} className="text-xs text-slate-400 underline">
+                      {showAllHistory ? "접기" : "전체 보기"}
+                    </button>
+                  )}
+                </div>
+                {!history && !historyErr && (
+                  <div className="text-xs text-slate-400">전체 목록에서 같은 종목을 찾는 중… (처음엔 20초쯤 걸려요)</div>
+                )}
+                {historyErr && <div className="text-xs text-red-500">이력을 불러오지 못했어요: {historyErr}</div>}
+                {history && (
+                  <ul className="space-y-1">
+                    {(showAllHistory ? history : history.slice(0, 4)).map((r) => {
+                      const isCur = r.no === report.no;
+                      return (
+                        <li key={`${r.no}-${r.date}`} className="flex items-baseline gap-2 text-xs">
+                          <span className="w-20 shrink-0 text-slate-400">{r.date}</span>
+                          <span className="w-12 shrink-0 text-slate-500">{r.author}</span>
+                          {isCur || !onOpenReport ? (
+                            <span className={`truncate ${isCur ? "font-semibold text-slate-900" : "text-slate-600"}`}>
+                              {r.title}
+                              {isCur && <span className="ml-1 font-normal text-blue-600">· 지금 보는 리포트</span>}
+                            </span>
+                          ) : (
+                            <button onClick={() => onOpenReport(r)} className="truncate text-left text-slate-600 hover:underline">
+                              {r.title}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               {/* 모드 선택 */}
-              <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-                {(["full", "trade", "counter"] as const).map((m) => (
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm sm:grid-cols-4">
+                {(["full", "trade", "counter", "compare"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                    disabled={m === "compare" && olderReports.length === 0}
+                    title={m === "compare" && olderReports.length === 0 ? "이 종목의 이전 리포트가 없어요" : undefined}
+                    className={`rounded-md px-3 py-1.5 font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
                       mode === m ? "bg-white text-slate-900 shadow" : "text-slate-500"
                     }`}
                   >
@@ -273,6 +408,29 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                     작성 애널과 논리가 정반대인 애널이 기본으로 골라져요. 같은 리포트를 그 애널이 읽었다면 무엇을 의심할지 봅니다.
                   </p>
                   <AnalystCard p={data.counterLens} role="반론 렌즈" />
+                </div>
+              )}
+
+              {/* 비교 대상 선택 */}
+              {mode === "compare" && (
+                <div className="space-y-2 rounded-lg border border-teal-100 bg-teal-50/50 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-teal-800">비교할 이전 리포트</span>
+                    <select
+                      value={prevNo ?? ""}
+                      onChange={(e) => setPrevNo(e.target.value)}
+                      className="max-w-full rounded-md border border-teal-200 bg-white px-2 py-1 text-sm"
+                    >
+                      {olderReports.map((r) => (
+                        <option key={`${r.no}-${r.date}`} value={r.no ?? ""}>
+                          {r.date} · {r.author} · {r.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-teal-700/80">
+                    추정치 변화, 이전 리포트 예측이 맞았는지 채점, 새로 생기거나 사라진 논리, 톤 변화와 말 바뀜을 봅니다.
+                  </p>
                 </div>
               )}
 
@@ -315,7 +473,9 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                   </div>
                   <div>
                     <div className="mb-1 text-xs font-medium text-slate-500">
-                      완성 프롬프트 (지침 + 프로파일 + PDF본문, {prompt.length.toLocaleString()}자)
+                      {mode === "compare" && compareLoading
+                        ? "두 리포트 PDF를 읽어 비교 프롬프트를 만드는 중…"
+                        : `완성 프롬프트 (${mode === "compare" ? "두 리포트 본문" : "지침 + 프로파일 + PDF본문"}, ${prompt.length.toLocaleString()}자)`}
                     </div>
                     <textarea
                       readOnly
@@ -349,6 +509,8 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                         ? "매매모드: 웹검색으로 최신가 보강"
                         : mode === "counter"
                           ? `반론모드: ${data.counterLens.name} 렌즈로 재검증`
+                          : mode === "compare"
+                            ? `비교모드: ${prevReport?.date ?? "?"} 리포트 대비`
                           : "풀모드: 모듈 1~5 + 확신도·상승여력"}
                       {aiModel ? ` · ${aiModel}` : ""}
                     </span>

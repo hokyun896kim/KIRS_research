@@ -126,3 +126,18 @@ export function detectAuthors(text: string): { analyst: string | null; ra: strin
   const r = text.match(/\bRA[\s\u0000]*([가-힣]{2,4})/);
   return { analyst: a ? a[1] : null, ra: r ? r[1] : null };
 }
+
+// 전체 목록(모든 페이지)을 긁는다. KIRS 검색은 종목명으로 안 되므로 종목 이력은 이 색인에서 찾는다.
+// 한 페이지라도 실패하면 throw — 불완전한 색인이 캐시되지 않게.
+export async function fetchAllReports(concurrency = 8): Promise<Report[]> {
+  const first = await fetchList(1);
+  const pageCount = first.pageCount ?? 1;
+  const rest = Array.from({ length: Math.max(0, pageCount - 1) }, (_, i) => i + 2);
+  const all: Report[] = [...first.reports];
+  const once = (p: number) => fetchList(p).then((r) => r.reports);
+  for (let i = 0; i < rest.length; i += concurrency) {
+    const chunk = await Promise.all(rest.slice(i, i + concurrency).map((p) => once(p).catch(() => once(p))));
+    for (const reports of chunk) all.push(...reports);
+  }
+  return all;
+}

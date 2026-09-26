@@ -181,3 +181,74 @@ export function buildCounterPrompt(i: CounterPromptInput): string {
       : [`"""`, i.pdfText, `"""`]),
   ].join("\n");
 }
+
+export type CompareSide = {
+  report: PromptInput["report"];
+  analyst: string | null;
+  profile?: Profile;
+  pdfText: string;
+};
+
+function monthsBetween(a: string, b: string): number | null {
+  const pa = a.match(/(\d{4})-(\d{2})/), pb = b.match(/(\d{4})-(\d{2})/);
+  if (!pa || !pb) return null;
+  return Math.abs((+pa[1] - +pb[1]) * 12 + (+pa[2] - +pb[2]));
+}
+
+// 비교모드: 같은 종목의 이번 리포트와 이전 리포트를 나란히 놓고 "무엇이 바뀌었나"를 판독한다.
+// PDF를 첨부할 때는 문서 1 = 이번, 문서 2 = 이전 순서로 넣는다.
+export function buildComparePrompt(i: { current: CompareSide; previous: CompareSide; attachedPdf?: boolean }): string {
+  const { current: cur, previous: prev } = i;
+  const SEP = "─".repeat(34);
+  const code = cur.report.code ? ` (${cur.report.code})` : "";
+  const gap = monthsBetween(cur.report.date, prev.report.date);
+  const lens = (s: CompareSide) =>
+    s.profile ? `${s.profile.name} — ${s.profile.type} / 원퀘스천: ${s.profile.oneQuestion}` : `${s.analyst ?? s.report.author} (DB 미등록)`;
+  const sameAuthor = (cur.analyst ?? cur.report.author) === (prev.analyst ?? prev.report.author);
+
+  return [
+    `당신은 같은 종목에 대한 한국IR협의회 리포트 두 편을 비교해 "무엇이 바뀌었나"를 판독하는 분석가입니다. 한국어로 출력하세요.`,
+    ``,
+    SEP,
+    `[비교 대상]`,
+    SEP,
+    `- 종목: ${cur.report.name}${code}`,
+    `- 이번 리포트: ${cur.report.date} · "${cur.report.title}" · 작성 ${lens(cur)}`,
+    `- 이전 리포트: ${prev.report.date} · "${prev.report.title}" · 작성 ${lens(prev)}`,
+    `- 간격: ${gap != null ? `약 ${gap}개월` : "확실하지 않음"}${sameAuthor ? " · 같은 애널리스트" : " · 작성자가 바뀜"}`,
+    ``,
+    `[비교 지시]`,
+    `1) 첫 줄 요약: "이전 대비 ○○ — 톤 상향/유지/하향" 한 줄.`,
+    `2) 추정치 변화 표 [항목(매출·영업이익·순이익·EPS·BPS, 연도별) | 이전 리포트 | 이번 리포트 | 변화 %]. 같은 연도끼리만 비교하고 단위를 맞추세요.`,
+    `3) 이전 리포트 예측 채점: 이전 리포트가 전망했던 연도의 실적이 이번 리포트에 실적(A)으로 나와 있으면 [항목 | 이전 전망 | 실제 | 오차 %] 표로 채점하고, 적중·빗나감의 이유를 한 줄씩. 없으면 "확실하지 않음".`,
+    `4) 투자포인트 변화: 유지된 논리 / 새로 등장한 논리 / 사라진 논리. 사라진 논리는 왜 빠졌는지 추정하고 "확인 필요"로 표시.`,
+    `5) 톤·확신도 변화: 이전 N/5 → 이번 N/5, 강조 어휘와 유보 표현의 변화를 양쪽 원문 인용(쪽 번호)으로 대조.`,
+    `6) 말 바뀜 경보: 이전에 강하게 주장했는데 이번에 약해지거나 뒤집힌 주장 [이전 인용 | 이번 인용 | 해석]. 없으면 "없음".`,
+    ...(sameAuthor ? [] : [`7) 작성자가 바뀌었으므로, 렌즈(애널 성향) 차이 때문에 달라 보이는 부분과 기업 자체의 변화를 구분하세요.`]),
+    `${sameAuthor ? "7" : "8"}) 결론: 변화 방향 ⬆개선 / ➡유지 / ⬇악화 + 이번 리포트에서 확인할 체크리스트(사용자확인).`,
+    `인용은 두 리포트 본문에 실제로 있는 문장만 쓰고, 숫자가 없으면 지어내지 말고 "확실하지 않음"으로 표시하세요.`,
+    ``,
+    ...(i.attachedPdf
+      ? [
+          SEP,
+          `[리포트 본문]`,
+          SEP,
+          `첨부 문서 1 = 이번 리포트(${cur.report.date}), 문서 2 = 이전 리포트(${prev.report.date})입니다. 표·차트의 숫자는 표에서 확인하세요.`,
+        ]
+      : [
+          SEP,
+          `[이번 리포트 본문 — ${cur.report.date}]`,
+          SEP,
+          `"""`,
+          cur.pdfText,
+          `"""`,
+          ``,
+          SEP,
+          `[이전 리포트 본문 — ${prev.report.date}]`,
+          SEP,
+          `"""`,
+          prev.pdfText,
+          `"""`,
+        ]),
+  ].join("\n");
+}

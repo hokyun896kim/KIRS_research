@@ -272,7 +272,9 @@ export default function ReportList() {
         </div>
       )}
 
-      {selected && <ReportDetail report={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <ReportDetail key={`${selected.no}-${selected.date}`} report={selected} onClose={() => setSelected(null)} onOpenReport={setSelected} />
+      )}
       {showGuide && <AnalystGuide onClose={() => setShowGuide(false)} onPick={(name) => applySearch("worker", name)} />}
     </div>
   );
