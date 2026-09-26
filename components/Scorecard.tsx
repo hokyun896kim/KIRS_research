@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Scorecard, HorizonKey, AnalystScore, ScoredReport } from "@/lib/scorecard";
 import { stanceDot } from "./AnalystCard";
+import VerdictCheck from "./VerdictCheck";
 
 const HORIZON_LABEL: Record<HorizonKey, string> = { "1M": "1개월", "3M": "3개월", "6M": "6개월", "12M": "12개월" };
 const MIN_N = 3; // 표본이 이보다 적으면 순위에서 제외
@@ -159,6 +160,8 @@ export default function ScorecardView() {
               </tbody>
             </table>
           </div>
+
+          <VerdictCheck h={h} hLabel={HORIZON_LABEL[h]} />
 
           <p className="mt-3 text-xs leading-relaxed text-slate-400">
             기준: 발간일(이후 첫 거래일) 종가 → {HORIZON_LABEL[h]}(거래일 기준) 뒤 종가, 수정주가·배당 미포함. 초과수익 = 종목 수익률 − 같은 기간

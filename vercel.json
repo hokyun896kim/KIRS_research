@@ -7,6 +7,10 @@
     {
       "path": "/api/scorecard",
       "schedule": "50 20 * * *"
+    },
+    {
+      "path": "/api/verdicts/sync",
+      "schedule": "10 21 * * *"
     }
   ]
 }

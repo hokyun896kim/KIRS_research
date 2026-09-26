@@ -6,6 +6,7 @@ import { classifySector } from "@/lib/sector";
 import { buildPrompt, buildCounterPrompt, buildComparePrompt } from "@/lib/prompt";
 import { getGuideline } from "@/lib/guideline-loader";
 import { loadReport, metaFrom, type ReportMeta } from "@/lib/report-input";
+import { parseVerdict, saveVerdict } from "@/lib/verdicts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const SOFT_DEADLINE_MS = 280_000;
 
 type Mode = "full" | "trade" | "counter" | "compare";
-type Side = Partial<ReportMeta> & { url?: string };
+type Side = Partial<ReportMeta> & { url?: string; no?: string | null };
 type Body = Side & {
   mode?: Mode;
   lens?: string; // 반론모드 렌즈 애널 이름
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       let timedOut = false;
+      let full = "";
       const timer = setTimeout(() => {
         timedOut = true;
         stream.abort();
@@ -108,7 +110,18 @@ export async function POST(req: NextRequest) {
       try {
         for await (const ev of stream) {
           if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+            full += ev.delta.text;
             controller.enqueue(encoder.encode(ev.delta.text));
+          }
+        }
+        // 풀·매매모드가 끝까지 나오면 모듈 7·8 판정을 저장 (성적표의 "AI 판정 검증"용)
+        if ((mode === "full" || mode === "trade") && b.no) {
+          const v = parseVerdict(full);
+          if (v.verdict || v.conviction != null) {
+            await saveVerdict(
+              { no: String(b.no), mode, ...v, createdAt: new Date().toISOString() },
+              { name: report.name, code: report.code, date: report.date, author: report.author, model: MODEL }
+            ).catch(() => {});
           }
         }
       } catch (e) {

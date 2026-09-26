@@ -226,6 +226,7 @@ export default function ReportDetail({
         headers: { "Content-Type": "application/json" },
         signal: ctrl.signal,
         body: JSON.stringify({
+          no: report.no,
           url: report.pdfUrl,
           name: report.name,
           code: report.code,
