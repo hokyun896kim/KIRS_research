@@ -41,9 +41,19 @@ npm run dev
 
 ## AI 자동분석 (선택)
 
-상세 화면의 **AI 자동분석 ✨** 탭은 `app/api/analyze/route.ts`에서 Anthropic API(`claude-sonnet-4-6`)를
-호출해 결과를 스트리밍합니다. Vercel 프로젝트 → Settings → Environment Variables 에
+상세 화면의 **AI 자동분석 ✨** 탭은 `app/api/analyze/route.ts`에서 Anthropic API(`claude-sonnet-4-6`, 적응형 사고)를
+호출해 결과를 스트리밍합니다. 추출 텍스트 대신 **PDF 원본(표·차트 포함)** 을 그대로 첨부하고(20MB 초과 시 텍스트로 대체),
+매매모드에서는 웹검색으로 현재가를 보강합니다. Vercel 프로젝트 → Settings → Environment Variables 에
 `ANTHROPIC_API_KEY`를 추가하면 켜집니다. (없어도 프롬프트 복사 기능은 그대로 동작)
+
+## 앱 전용 추가 모듈
+
+`lib/guideline.md`(커스텀 GPT 8,000자 한도)는 그대로 두고, `lib/prompt.ts`가 프롬프트 뒤에 두 모듈을 붙입니다.
+
+- **모듈 7 · 뉘앙스·확신도 판독** — 애널 프로파일을 평소 톤으로 삼아 확신/유보 신호를 원문 인용으로 짚고,
+  `확신도 N/5 · 🔥필독 / 📌참고 / ⏭패스`로 판정
+- **모듈 8 · 내재 상승여력 역산** — KIRS 리포트엔 목표주가·투자의견이 없으므로, 리포트 속 밴드·피어 멀티플 × 추정 실적으로
+  보수/기준/낙관 적정가와 업사이드 %를 계산 (매매모드는 현재가 기준 열 추가)
 
 ## 배포
 

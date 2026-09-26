@@ -105,8 +105,15 @@ export async function fetchList(page = 1, area = "", keyword = ""): Promise<List
   return { total, page, pageCount: total != null ? Math.ceil(total / 10) : null, reports };
 }
 
+export async function fetchPdf(url: string): Promise<Buffer> {
+  return (await fetchInsecure(url, true)) as Buffer;
+}
+
 export async function extractPdf(url: string): Promise<{ pages: number | null; text: string }> {
-  const buf = (await fetchInsecure(url, true)) as Buffer;
+  return extractPdfText(await fetchPdf(url));
+}
+
+export async function extractPdfText(buf: Buffer): Promise<{ pages: number | null; text: string }> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buf));
   const { totalPages, text } = await extractText(pdf, { mergePages: true });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { extractPdf, detectAuthors, isAllowedPdfUrl } from "@/lib/kirs";
+import { fetchPdf, extractPdfText, detectAuthors, isAllowedPdfUrl } from "@/lib/kirs";
 import { matchProfile } from "@/lib/profiles";
 import { classifySector } from "@/lib/sector";
 import { buildPrompt } from "@/lib/prompt";
@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const MODEL = "claude-sonnet-4-6";
+// PDF 원본을 그대로 보내면 표·차트까지 읽는다. 요청 한도(32MB) 안쪽만 첨부하고, 넘으면 추출 텍스트로 대체.
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
 
 type Body = {
   url?: string;
@@ -38,8 +40,11 @@ export async function POST(req: NextRequest) {
   };
 
   let prompt: string;
+  let pdfBase64: string | null = null;
   try {
-    const { text } = await extractPdf(b.url);
+    const buf = await fetchPdf(b.url);
+    if (buf.length <= MAX_PDF_BYTES) pdfBase64 = buf.toString("base64");
+    const { text } = await extractPdfText(buf);
     const { analyst, ra } = detectAuthors(text);
     prompt = buildPrompt({
       guideline: getGuideline(),
@@ -51,6 +56,7 @@ export async function POST(req: NextRequest) {
       pdfText: text,
       mode,
       sector: classifySector(report.name, report.title).label,
+      attachedPdf: pdfBase64 != null,
     });
   } catch (e) {
     return NextResponse.json({ error: "extract failed", message: (e as Error).message }, { status: 502 });
@@ -59,10 +65,28 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic();
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 16000,
-    messages: [{ role: "user", content: prompt }],
+    max_tokens: 32000,
+    // 상승여력 역산(멀티플 × 추정실적) 같은 계산이 있어 적응형 사고를 켠다
+    thinking: { type: "adaptive" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...(pdfBase64
+            ? [
+                {
+                  type: "document" as const,
+                  source: { type: "base64" as const, media_type: "application/pdf" as const, data: pdfBase64 },
+                  title: `${report.name} — ${report.title}`,
+                },
+              ]
+            : []),
+          { type: "text" as const, text: prompt },
+        ],
+      },
+    ],
     // 매매모드: 현재가·52주 고저·밸류를 최신 웹검색으로 보강
-    ...(mode === "trade" ? { tools: [{ type: "web_search_20250305" as const, name: "web_search" as const, max_uses: 5 }] } : {}),
+    ...(mode === "trade" ? { tools: [{ type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 5 }] } : {}),
   });
 
   const encoder = new TextEncoder();

@@ -201,7 +201,7 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                       mode === m ? "bg-white text-slate-900 shadow" : "text-slate-500"
                     }`}
                   >
-                    {m === "full" ? "풀모드 (모듈 1~5)" : "매매모드 (+모듈 6·웹검색)"}
+                    {m === "full" ? "풀모드 (모듈 1~5·7·8)" : "매매모드 (+모듈 6·웹검색)"}
                   </button>
                 ))}
               </div>
@@ -275,15 +275,15 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                       </button>
                     )}
                     <span className="text-xs text-slate-400">
-                      {mode === "trade" ? "매매모드: 웹검색으로 최신가 보강" : "풀모드: 모듈 1~5"}
+                      {mode === "trade" ? "매매모드: 웹검색으로 최신가 보강" : "풀모드: 모듈 1~5 + 확신도·상승여력"}
                       {aiModel ? ` · ${aiModel}` : ""}
                     </span>
                   </div>
 
                   {!aiText && !aiLoading && !aiErr && (
                     <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-                      버튼을 누르면 지침대로 이 리포트를 작성 애널 렌즈로 분석해 결과를 바로 보여줘요. 복사·붙여넣기가
-                      필요 없어요. (호출당 소액 비용 발생)
+                      버튼을 누르면 PDF 원본(표·차트 포함)을 직접 읽고, 작성 애널 렌즈 분석에 더해 확신도(필독/참고/패스)와
+                      내재 상승여력까지 보여줘요. 복사·붙여넣기가 필요 없어요. (호출당 소액 비용 발생)
                     </p>
                   )}
 
@@ -291,7 +291,14 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{aiErr}</div>
                   )}
 
-                  {(aiText || aiLoading) && (
+                  {aiLoading && !aiText && (
+                    <div className="flex items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 p-3 text-xs text-violet-700">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-200 border-t-violet-600" />
+                      PDF를 읽고 생각하는 중… 표·차트까지 보느라 첫 글자까지 1~2분 걸릴 수 있어요.
+                    </div>
+                  )}
+
+                  {aiText && (
                     <div className="rounded-lg border border-slate-200 bg-white p-4">
                       <div className="md">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiText}</ReactMarkdown>
