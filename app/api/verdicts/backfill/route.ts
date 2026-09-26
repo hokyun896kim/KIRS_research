@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
 
   const [index, verdicts, batches] = await Promise.all([getReportIndex(), listVerdicts(), listBatches()]);
   const done = new Set([...verdicts.map((v) => v.no), ...batches.flatMap((x) => x.ids)]);
-  const candidates = index.filter((r) => r.no && r.pdfUrl && r.date >= since && !done.has(r.no));
+  // 오래된 것부터: 수익률 기간(6·12개월)이 먼저 찬 리포트가 먼저 채점되도록
+  const candidates = index
+    .filter((r) => r.no && r.pdfUrl && r.date >= since && !done.has(r.no))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const pick = candidates.slice(0, limit);
 
   const loaded = await pool(pick, 6, async (r) => {
