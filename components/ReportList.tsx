@@ -77,12 +77,20 @@ export default function ReportList() {
             <b>AI 자동분석</b>까지 한 번에.
           </p>
         </div>
-        <button
-          onClick={() => setShowGuide(true)}
-          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          📖 애널 도감
-        </button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <a
+            href="/scorecard"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            📊 애널 성적표
+          </a>
+          <button
+            onClick={() => setShowGuide(true)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            📖 애널 도감
+          </button>
+        </div>
       </header>
 
       {/* 애널리스트 빠른 필터 */}

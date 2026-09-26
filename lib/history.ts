@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { fetchAllReports, type Report } from "./kirs";
 
 // 1,200건+ 전체 색인은 6시간 캐시 (첫 빌드 20초 안팎)
-const getReportIndex = unstable_cache(() => fetchAllReports(), ["kirs-report-index-v1"], {
+export const getReportIndex = unstable_cache(() => fetchAllReports(), ["kirs-report-index-v1"], {
   revalidate: 6 * 3600,
   tags: ["kirs-report-index"],
 });
