@@ -170,3 +170,37 @@ export function matchProfile(name?: string | null): Profile | undefined {
   const n = name.replace(/\s+/g, "").replace(/^(Analyst|RA|연구원|연구위원)/i, "");
   return BY_NAME.get(n) ?? PROFILES.find((p) => n.includes(p.name));
 }
+
+// 반론 렌즈 기본값: 각 애널의 핵심 논리를 정면으로 묻는 상대를 짝지어 둔다.
+// (예: 이벤트형 김승준 "성공 확률?" ↔ 박선영 "바닥 본업이 뭐지?")
+export const COUNTER_OF: Record<string, string> = {
+  박성순: "김경민", // 좋아질 이유 ↔ 숫자는 언제 찍히나
+  김경민: "조영환", // 수혜 서사 ↔ 이익률이 구조적인가
+  김선호: "김태현", // 해자 ↔ 내년 실적이 확실한가
+  김승준: "박선영", // 이벤트 ↔ 바닥 본업
+  이나연: "서진경", // 속으로 좋아짐 ↔ 촉매가 있나
+  이원재: "채윤석", // 싸다 ↔ 무엇으로 바뀌나 (가치함정)
+  김태현: "김선호", // 반등 ↔ 구조적 해자인가
+  박선영: "백종석", // 바닥 본업 ↔ 성장동력이 숫자로 언제
+  채윤석: "조영환", // 모델 전환 ↔ 돈을 더 버는가
+  백종석: "박선영", // 숨은 성장동력 ↔ 바닥 본업
+  조영환: "김선호", // 마진 개선 ↔ 해자 없이 지속되나
+  서진경: "김승준", // 할인 해소 ↔ 촉매 확률
+  정수현: "이나연", // 신제품 사이클 ↔ 체질 개선이 숫자로 보이나
+  이희경: "조영환", // 수주 가시화 ↔ 이익률 (초기비용)
+};
+
+// 짝이 작성자·RA와 겹치면: 지형(구조) 비중 차이가 크고 스탠스 계열이 다른 애널로 대체.
+const terrain = (p: Profile) => Number(p.ratio.split("/")[0]) || 50;
+const stanceFamily = (p: Profile) => p.stance.split(" ")[0];
+
+export function counterProfile(author?: Profile | null, exclude: string[] = []): Profile {
+  const skip = new Set([author?.name, ...exclude]);
+  const paired = author && BY_NAME.get(COUNTER_OF[author.name]);
+  if (paired && !skip.has(paired.name)) return paired;
+  const pool = PROFILES.filter((p) => !skip.has(p.name));
+  if (!author) return BY_NAME.get("김선호") && !skip.has("김선호") ? BY_NAME.get("김선호")! : pool[0];
+  const score = (p: Profile) =>
+    Math.abs(terrain(p) - terrain(author)) + (stanceFamily(p) !== stanceFamily(author) ? 10 : 0);
+  return pool.reduce((a, b) => (score(b) > score(a) ? b : a));
+}

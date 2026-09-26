@@ -5,12 +5,22 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Report, ExtractResponse } from "@/lib/types";
 import AnalystCard from "./AnalystCard";
+import { PROFILES } from "@/lib/profiles";
+
+type Mode = "full" | "trade" | "counter";
+
+const MODE_LABEL: Record<Mode, string> = {
+  full: "풀모드 (모듈 1~5·7·8)",
+  trade: "매매모드 (+모듈 6·웹검색)",
+  counter: "반론모드 (반대 렌즈)",
+};
 
 export default function ReportDetail({ report, onClose }: { report: Report; onClose: () => void }) {
   const [data, setData] = useState<ExtractResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<"full" | "trade">("full");
+  const [mode, setMode] = useState<Mode>("full");
+  const [lensLoading, setLensLoading] = useState(false);
   const [tab, setTab] = useState<"prompt" | "ai">("prompt");
   const [copied, setCopied] = useState(false);
 
@@ -64,7 +74,40 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
     setAiLoading(false);
   }, [mode]);
 
-  const prompt = data ? (mode === "full" ? data.promptFull : data.promptTrade) : "";
+  // 반론 렌즈를 바꾸면 해당 렌즈의 반론 프롬프트만 다시 받아온다
+  async function changeLens(name: string) {
+    if (!report.pdfUrl || !data || name === data.counterLens.name) return;
+    setLensLoading(true);
+    setAiText("");
+    setAiErr(null);
+    try {
+      const qs = new URLSearchParams({
+        url: report.pdfUrl,
+        name: report.name,
+        code: report.code ?? "",
+        title: report.title,
+        date: report.date,
+        author: report.author,
+        lens: name,
+      });
+      const r = await fetch(`/api/extract?${qs.toString()}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setData((d) => (d ? { ...d, counterLens: j.counterLens, promptCounter: j.promptCounter } : d));
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setLensLoading(false);
+    }
+  }
+
+  const prompt = data
+    ? mode === "full"
+      ? data.promptFull
+      : mode === "trade"
+        ? data.promptTrade
+        : data.promptCounter
+    : "";
 
   async function copy() {
     if (!prompt) return;
@@ -99,6 +142,7 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
           date: report.date,
           author: report.author,
           mode,
+          ...(mode === "counter" && data ? { lens: data.counterLens.name } : {}),
         }),
       });
       setAiModel(res.headers.get("X-Analyze-Model"));
@@ -193,7 +237,7 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
 
               {/* 모드 선택 */}
               <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-                {(["full", "trade"] as const).map((m) => (
+                {(["full", "trade", "counter"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
@@ -201,10 +245,36 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                       mode === m ? "bg-white text-slate-900 shadow" : "text-slate-500"
                     }`}
                   >
-                    {m === "full" ? "풀모드 (모듈 1~5·7·8)" : "매매모드 (+모듈 6·웹검색)"}
+                    {MODE_LABEL[m]}
                   </button>
                 ))}
               </div>
+
+              {/* 반론 렌즈 선택 */}
+              {mode === "counter" && (
+                <div className="space-y-2 rounded-lg border border-rose-100 bg-rose-50/50 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-rose-800">반론 렌즈</span>
+                    <select
+                      value={data.counterLens.name}
+                      disabled={lensLoading}
+                      onChange={(e) => changeLens(e.target.value)}
+                      className="rounded-md border border-rose-200 bg-white px-2 py-1 text-sm"
+                    >
+                      {PROFILES.filter((p) => p.name !== data.profile?.name).map((p) => (
+                        <option key={p.name} value={p.name}>
+                          {p.name} · {p.type}
+                        </option>
+                      ))}
+                    </select>
+                    {lensLoading && <span className="text-xs text-rose-500">프롬프트 다시 만드는 중…</span>}
+                  </div>
+                  <p className="text-xs text-rose-700/80">
+                    작성 애널과 논리가 정반대인 애널이 기본으로 골라져요. 같은 리포트를 그 애널이 읽었다면 무엇을 의심할지 봅니다.
+                  </p>
+                  <AnalystCard p={data.counterLens} role="반론 렌즈" />
+                </div>
+              )}
 
               {/* 탭 */}
               <div className="flex gap-4 border-b border-slate-200 text-sm">
@@ -275,7 +345,11 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                       </button>
                     )}
                     <span className="text-xs text-slate-400">
-                      {mode === "trade" ? "매매모드: 웹검색으로 최신가 보강" : "풀모드: 모듈 1~5 + 확신도·상승여력"}
+                      {mode === "trade"
+                        ? "매매모드: 웹검색으로 최신가 보강"
+                        : mode === "counter"
+                          ? `반론모드: ${data.counterLens.name} 렌즈로 재검증`
+                          : "풀모드: 모듈 1~5 + 확신도·상승여력"}
                       {aiModel ? ` · ${aiModel}` : ""}
                     </span>
                   </div>

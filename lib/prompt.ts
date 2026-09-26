@@ -127,3 +127,57 @@ export function buildPrompt(i: PromptInput): string {
       : [`"""`, i.pdfText, `"""`]),
   ].join("\n");
 }
+
+export type CounterPromptInput = Omit<PromptInput, "mode"> & { lens: Profile };
+
+// 반론모드: 같은 리포트를 스탠스가 다른 애널의 렌즈로 다시 읽는다 (확증편향 방지).
+export function buildCounterPrompt(i: CounterPromptInput): string {
+  const { report, profile, analyst, ra, lens } = i;
+  const code = report.code ? ` (${report.code})` : "";
+  const days = daysSince(report.date);
+  const aged = days != null && days >= 30 ? `  ⚠ 발간 후 ${days}일 경과 — 공시·실적·시장 변동 확인 필요` : "";
+  const SEP = "─".repeat(34);
+
+  return [
+    `당신은 한국IR협의회 리서치 보고서를 "반대편 애널리스트의 렌즈"로 반론 검토하는 분석가입니다.`,
+    `아래 [실행 지침]의 프로파일·신호 체계를 참고하되, 이번에는 작성자의 렌즈가 아니라 지정된 반론 렌즈로 리포트를 다시 읽고 한국어로 출력하세요.`,
+    ``,
+    SEP,
+    `[실행 지침]`,
+    SEP,
+    i.guideline,
+    ``,
+    SEP,
+    `[이번 분석 대상]`,
+    SEP,
+    `- 종목: ${report.name}${code} · 추정 섹터: ${i.sector ?? "기타"}`,
+    `- 제목: ${report.title}`,
+    `- 발간일: ${report.date}${aged}`,
+    `- 작성자(Analyst): ${analyst ?? report.author}${ra ? ` / RA: ${ra}` : ""}`,
+    profile
+      ? `- 원작성 렌즈: ${profile.name} — ${profile.type} / 스탠스: ${profile.stance} / 원퀘스천: ${profile.oneQuestion}`
+      : `- 원작성 렌즈: (DB 미등록 — 문체로 유형 추정)`,
+    `- 반론 렌즈: ${lens.name} — ${lens.type} / 스탠스: ${lens.stance}`,
+    `    · 원퀘스천: ${lens.oneQuestion}`,
+    `    · 강점: ${lens.strength}`,
+    `    · 주의/검증: ${lens.caution}`,
+    `    · 문법·키워드: ${lens.keyword}`,
+    `- 출력 모드: 반론모드`,
+    ``,
+    `[반론 검토 지시]`,
+    `1) 첫 줄은 반론 렌즈의 원퀘스천을 이 종목에 맞게 바꿔 던지며 시작하세요.`,
+    `2) 핵심 주장 재검증 표 [원 리포트 주장(원문 인용, 쪽) | 반론 렌즈의 의문 | 리포트 안의 반박 근거 | 판정 🟢버팀 / 🟡약함 / 🔴무너짐] 4~6행.`,
+    `3) 공백 점검: 반론 렌즈가 중요하게 보지만 리포트가 다루지 않거나 짧게 넘긴 것 3개.`,
+    `4) 숫자 스트레스 테스트: 리포트 추정치 중 가장 취약한 가정 1~2개를 골라, 그 가정이 틀리면 실적·밸류가 어떻게 바뀌는지 계산식으로 (계산할 숫자가 없으면 "확실하지 않음").`,
+    `5) 톤 비교: 원작성자 확신도 N/5 vs 반론 렌즈 기준 확신도 N/5, 차이가 나는 이유.`,
+    `6) 결론: "원 렌즈: ○ / 반론 렌즈: ○ / 종합 판정: 🔥필독 · 📌참고 · ⏭패스" 한 줄 + 반론을 이겨내려면 확인할 체크리스트(사용자확인).`,
+    `7) 반론을 위한 반론은 금지합니다. 리포트 근거가 탄탄하면 🟢로 인정하세요. 인용은 본문에 실제로 있는 문장만 쓰세요.`,
+    ``,
+    SEP,
+    `[리포트 본문]`,
+    SEP,
+    ...(i.attachedPdf
+      ? [`첨부한 PDF 원본을 직접 읽으세요. 재무 추정표·밸류에이션 표·차트의 숫자는 표에서 확인하고, 인용할 때는 쪽 번호를 적으세요.`]
+      : [`"""`, i.pdfText, `"""`]),
+  ].join("\n");
+}

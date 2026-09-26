@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchPdf, extractPdfText, detectAuthors, isAllowedPdfUrl } from "@/lib/kirs";
-import { matchProfile } from "@/lib/profiles";
+import { matchProfile, counterProfile } from "@/lib/profiles";
 import { classifySector } from "@/lib/sector";
-import { buildPrompt } from "@/lib/prompt";
+import { buildPrompt, buildCounterPrompt } from "@/lib/prompt";
 import { getGuideline } from "@/lib/guideline-loader";
 
 export const runtime = "nodejs";
@@ -23,7 +23,8 @@ type Body = {
   title?: string;
   date?: string;
   author?: string;
-  mode?: "full" | "trade";
+  mode?: "full" | "trade" | "counter";
+  lens?: string; // 반론모드 렌즈 애널 이름
 };
 
 export async function POST(req: NextRequest) {
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (!isAllowedPdfUrl(b.url)) return NextResponse.json({ error: "domain not allowed" }, { status: 400 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
 
-  const mode = b.mode === "trade" ? "trade" : "full";
+  const mode = b.mode === "trade" || b.mode === "counter" ? b.mode : "full";
   const report = {
     name: b.name ?? "",
     code: b.code || null,
@@ -48,18 +49,25 @@ export async function POST(req: NextRequest) {
     if (buf.length <= MAX_PDF_BYTES) pdfBase64 = buf.toString("base64");
     const { text } = await extractPdfText(buf);
     const { analyst, ra } = detectAuthors(text);
-    prompt = buildPrompt({
+    const profile = matchProfile(analyst ?? report.author);
+    const base = {
       guideline: getGuideline(),
       report,
       analyst,
       ra,
-      profile: matchProfile(analyst ?? report.author),
+      profile,
       raProfile: ra ? matchProfile(ra) : undefined,
       pdfText: text,
-      mode,
       sector: classifySector(report.name, report.title).label,
       attachedPdf: pdfBase64 != null,
-    });
+    };
+    prompt =
+      mode === "counter"
+        ? buildCounterPrompt({
+            ...base,
+            lens: matchProfile(b.lens) ?? counterProfile(profile, [analyst, ra].filter((x): x is string => !!x)),
+          })
+        : buildPrompt({ ...base, mode });
   } catch (e) {
     return NextResponse.json({ error: "extract failed", message: (e as Error).message }, { status: 502 });
   }

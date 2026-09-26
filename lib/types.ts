@@ -28,4 +28,6 @@ export type ExtractResponse = {
   sector: { label: string; color: string };
   promptFull: string;
   promptTrade: string;
+  counterLens: Profile; // 반론모드 렌즈 (요청한 lens 또는 기본 짝)
+  promptCounter: string;
 };
