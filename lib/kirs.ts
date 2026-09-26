@@ -102,7 +102,7 @@ export async function fetchList(page = 1, area = "", keyword = ""): Promise<List
 
   const totalText = $("p.searchdata span").first().text().replace(/[^0-9]/g, "");
   const total = totalText ? Number(totalText) : null;
-  return { total, page, pageCount: total != null ? Math.max(1, Math.ceil(total / 10)) : null, reports };
+  return { total, page, pageCount: total != null ? Math.ceil(total / 10) : null, reports };
 }
 
 export async function extractPdf(url: string): Promise<{ pages: number | null; text: string }> {
