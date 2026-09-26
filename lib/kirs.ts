@@ -113,9 +113,9 @@ export async function extractPdf(url: string): Promise<{ pages: number | null; t
   return { pages: totalPages ?? null, text };
 }
 
-// 1면 "Analyst 채윤석 … RA 정수현" 표기에서 주 애널·보조(RA) 식별
+// 1면 "Analyst 채윤석 … RA 정수현" 표기에서 주 애널·보조(RA) 식별 (구 PDF는 구분자가 NUL 문자)
 export function detectAuthors(text: string): { analyst: string | null; ra: string | null } {
-  const a = text.match(/Analyst\s*([가-힣]{2,4})/);
-  const r = text.match(/\bRA\s*([가-힣]{2,4})/);
+  const a = text.match(/Analyst[\s\u0000]*([가-힣]{2,4})/);
+  const r = text.match(/\bRA[\s\u0000]*([가-힣]{2,4})/);
   return { analyst: a ? a[1] : null, ra: r ? r[1] : null };
 }
