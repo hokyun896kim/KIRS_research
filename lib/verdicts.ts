@@ -24,7 +24,8 @@ const inv = <T extends string>(m: Record<T, string>) => Object.fromEntries(Objec
 const V_DEC = inv(V_CODE);
 const R_DEC = inv(R_CODE);
 
-export const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+// 스토어 연결 시 BLOB_STORE_ID(+ Vercel OIDC)가 들어오고, 예전 방식은 BLOB_READ_WRITE_TOKEN
+export const blobEnabled = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 // 스토어를 공개로 만들었을 수도 있어 비공개 → 공개 순으로 시도
 async function putJson(pathname: string, data: unknown) {

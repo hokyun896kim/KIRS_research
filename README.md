@@ -82,7 +82,7 @@ Vercel Blob(`lib/verdicts.ts`)에 저장하고, 성적표 페이지에서 판정
   `ADMIN_KEY` 환경변수가 맞아야 제출되고, 먼저 비용을 미리 보여줍니다.
 - 모델이 이미 결과를 알고 있을 수 있는 오래된 리포트는 기본 통계에서 빼고 `FAIR_SINCE`(2025-09-01) 이후만 봅니다.
 - 끝난 배치는 매일 06:10(KST) 크론(`/api/verdicts/sync`)이 수거합니다.
-- 필요한 환경변수: `BLOB_READ_WRITE_TOKEN`(Blob 스토어 연결 시 자동), `ADMIN_KEY`, `ANTHROPIC_API_KEY`
+- 필요한 환경변수: `BLOB_STORE_ID`(Blob 스토어 연결 시 자동, Vercel OIDC로 인증 · 예전 방식 `BLOB_READ_WRITE_TOKEN`도 지원), `ADMIN_KEY`, `ANTHROPIC_API_KEY`
 
 ## 배포
 
