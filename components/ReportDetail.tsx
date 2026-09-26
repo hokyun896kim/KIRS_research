@@ -294,7 +294,7 @@ export default function ReportDetail({ report, onClose }: { report: Report; onCl
                   {aiLoading && !aiText && (
                     <div className="flex items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 p-3 text-xs text-violet-700">
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-200 border-t-violet-600" />
-                      PDF를 읽고 생각하는 중… 표·차트까지 보느라 첫 글자까지 1~2분 걸릴 수 있어요.
+                      PDF 원본(표·차트 포함)을 읽는 중… 첫 글자까지 10~30초 걸릴 수 있어요.
                     </div>
                   )}
 

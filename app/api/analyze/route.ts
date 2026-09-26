@@ -13,6 +13,8 @@ export const maxDuration = 300;
 const MODEL = "claude-sonnet-4-6";
 // PDF 원본을 그대로 보내면 표·차트까지 읽는다. 요청 한도(32MB) 안쪽만 첨부하고, 넘으면 추출 텍스트로 대체.
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
+// maxDuration(300초) 전에 스스로 끊어서 504 대신 "여기까지 분석" 안내를 남긴다.
+const SOFT_DEADLINE_MS = 280_000;
 
 type Body = {
   url?: string;
@@ -66,8 +68,7 @@ export async function POST(req: NextRequest) {
   const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 32000,
-    // 상승여력 역산(멀티플 × 추정실적) 같은 계산이 있어 적응형 사고를 켠다
-    thinking: { type: "adaptive" },
+    // 적응형 사고는 끈다: PDF 원본 + 긴 지시에서 사고만으로 Hobby 함수 한도(300초)를 넘겨 첫 글자도 못 내보냈다.
     messages: [
       {
         role: "user",
@@ -92,6 +93,11 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        stream.abort();
+      }, SOFT_DEADLINE_MS);
       try {
         for await (const ev of stream) {
           if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
@@ -99,8 +105,15 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (e) {
-        controller.enqueue(encoder.encode(`\n\n> ⚠ 분석 중 오류: ${(e as Error).message}`));
+        controller.enqueue(
+          encoder.encode(
+            timedOut
+              ? "\n\n> ⏱ 서버 실행 시간 한도(5분)에 가까워 여기서 멈췄어요. 이어서 보려면 '프롬프트 (복붙)' 탭으로 ChatGPT·Claude에서 돌려주세요."
+              : `\n\n> ⚠ 분석 중 오류: ${(e as Error).message}`
+          )
+        );
       } finally {
+        clearTimeout(timer);
         controller.close();
       }
     },
