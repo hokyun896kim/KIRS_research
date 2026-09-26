@@ -59,7 +59,7 @@ export default function ScorecardView() {
       {!data && !err && (
         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-500" />
-          리포트 1,200여 건을 주가로 채점하는 중… 처음 계산할 땐 1~2분 걸려요 (하루 한 번 갱신).
+          리포트 1,200여 건을 주가로 채점하는 중… (하루 한 번 새로 계산, 처음엔 10초쯤 걸려요)
         </div>
       )}
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">성적표를 불러오지 못했어요: {err}</div>}

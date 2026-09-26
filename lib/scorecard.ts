@@ -176,7 +176,7 @@ async function buildScorecard(): Promise<Scorecard> {
   };
 }
 
-// 전체 계산은 1~2분 → 24시간 캐시 (vercel.json 크론이 매일 아침 미리 데워 둠)
+// 전체 계산(종목 수백 개 × 일봉)은 10초 안팎 → 24시간 캐시 (vercel.json 크론이 매일 아침 미리 데워 둠)
 export const getScorecard = unstable_cache(buildScorecard, ["kirs-scorecard-v1"], {
   revalidate: 24 * 3600,
   tags: ["kirs-scorecard"],
