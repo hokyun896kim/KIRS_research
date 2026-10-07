@@ -1,5 +1,6 @@
 import type { Profile } from "./profiles";
 import type { AnalysisContext } from "./analysis-context";
+import { VERDICT_RULE } from "./verdict-rule";
 
 export type PromptInput = {
   guideline: string; // guideline.md 전문
@@ -72,6 +73,7 @@ function extraModules(mode: "full" | "trade"): string[] {
     `- 리스크 서술: 분량과 구체성(숫자·시점 제시 여부). 짧고 형식적이면 확신 높음, 길고 구체적이면 경계 신호.`,
     `- 출력: "확신도 N/5 · 평소 대비 강함/평소/약함 · 판정 🔥필독 / 📌참고 / ⏭패스" 한 줄 + 이유 한 줄, 그리고 [신호 | 원문 인용 | 해석] 표.`,
     `- 인용은 본문에 실제로 있는 문장만 쓰고, 없는 말을 만들지 말 것.`,
+    ...VERDICT_RULE.map((r) => `- ${r}`),
     ``,
     `### 모듈 8. 내재 상승여력 역산`,
     `- 첫 줄에 명시: 한국IR협의회 리포트에는 목표주가·투자의견이 없으므로, 아래는 리포트 속 밸류 근거로 역산한 추정치이며 애널리스트 목표가가 아니다.`,

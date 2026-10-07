@@ -99,6 +99,14 @@ export async function listVerdicts(): Promise<Verdict[]> {
     .filter((x): x is Verdict => x != null);
 }
 
+// 한 리포트의 특정 모드 판정을 지운다 (일괄 판정을 다시 돌릴 때 예전 결과를 남기지 않으려고)
+export async function deleteVerdicts(no: string, mode: VerdictMode) {
+  if (!blobEnabled() || !/^[0-9A-Za-z-]+$/.test(no)) return 0;
+  const files = await listAll(`verdicts/v1/${no}__${mode}__`);
+  await Promise.all(files.map((f) => del(f.pathname)));
+  return files.length;
+}
+
 // 일괄 판정 배치 기록: batches/{batchId}.json = { ids: 리포트 번호[], createdAt }
 export type BatchRecord = { id: string; ids: string[]; since: string; createdAt: string };
 export const saveBatch = (b: BatchRecord) => putJson(`batches/${b.id}.json`, b);

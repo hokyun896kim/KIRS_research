@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Profile } from "./profiles";
 import type { ReportMeta } from "./report-input";
 import { ANALYSIS_MODEL, THINKING_OFF } from "./model";
+import { VERDICT_RULE } from "./verdict-rule";
 
 // 팝업 상단 "바이사이드 냉정 브리핑" 프롬프트·스키마. 생성·캐시는 brief-service.ts
 export const BRIEF_MODEL = ANALYSIS_MODEL;
@@ -98,6 +99,7 @@ export function buildBriefPrompt(c: BriefContext): string {
     `- 한국IR협의회(KIRS) 리포트는 투자의견·목표주가가 없는 기업 분석 자료로, 기업 소개 성격 때문에 긍정 편향이 있을 수 있습니다.`,
     `- positiveOdds는 "6~12개월 안에 리포트의 핵심 투자포인트가 실적·공시로 확인될 가능성"입니다. 50은 동전 던지기이고, 70 이상은 숫자로 이미 확인되는 근거가 탄탄할 때만 주세요. 근거가 기대·전망뿐이면 40 이하가 기본입니다.`,
     `- evidence에는 본문에 실제로 있는 문장·수치만 쓰고, 없는 사실을 만들지 마세요.`,
+    ...VERDICT_RULE.map((r) => `- verdict: ${r}`),
     ``,
     `[대상]`,
     `- 종목: ${c.report.name}${c.report.code ? ` (${c.report.code})` : ""} · 제목: ${c.report.title}`,

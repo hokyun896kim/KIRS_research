@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { blobEnabled, deleteBatch, listBatches, saveVerdict } from "@/lib/verdicts";
-import { BACKFILL_MODEL, noFromCustomId, type BackfillResult } from "@/lib/backfill";
+import { blobEnabled, deleteBatch, deleteVerdicts, listBatches, saveVerdict } from "@/lib/verdicts";
+import { BACKFILL_MODEL, noFromCustomId, upsideFrom, type BackfillResult } from "@/lib/backfill";
 import { getReportIndex } from "@/lib/history";
 
 export const runtime = "nodejs";
@@ -34,6 +34,10 @@ export async function GET() {
         const j = JSON.parse(block && block.type === "text" ? block.text : "") as BackfillResult;
         const no = noFromCustomId(r.custom_id);
         const m = meta.get(no);
+        // 예전 형식(baseUpside %)으로 낸 배치도 받는다
+        const legacy = (j as unknown as { baseUpside?: number | null }).baseUpside;
+        const baseUpside = j.valuation ? upsideFrom(j.valuation) : legacy == null ? null : legacy / 100;
+        await deleteVerdicts(no, "backfill"); // 다시 돌린 일괄 판정은 최신 결과 하나만 남긴다
         await saveVerdict(
           {
             no,
@@ -41,10 +45,10 @@ export async function GET() {
             verdict: j.verdict,
             conviction: Math.max(1, Math.min(5, j.conviction)),
             relative: j.relative,
-            baseUpside: j.baseUpside == null ? null : j.baseUpside / 100,
+            baseUpside,
             createdAt: new Date().toISOString(),
           },
-          { name: m?.name, code: m?.code, date: m?.date, author: m?.author, model: BACKFILL_MODEL, reason: j.reason, evidence: j.evidence }
+          { name: m?.name, code: m?.code, date: m?.date, author: m?.author, model: BACKFILL_MODEL, reason: j.reason, evidence: j.evidence, valuation: j.valuation }
         );
         saved++;
       } catch {
