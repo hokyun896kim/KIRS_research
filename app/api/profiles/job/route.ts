@@ -39,3 +39,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
+
+// 결과 조회만 (읽기 전용): ?key=&what=proposal|observations
+export async function GET(req: NextRequest) {
+  const sp = req.nextUrl.searchParams;
+  const keys = [process.env.ADMIN_KEY, process.env.JOB_KEY].filter(Boolean);
+  if (!keys.includes(sp.get("key") ?? "")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const what = sp.get("what");
+  const body = what === "observations" ? await getObservations() : await getProposal();
+  return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
+}
