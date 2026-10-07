@@ -82,6 +82,7 @@ export type BriefContext = {
   trackRecord?: string | null; // 성적표 요약 한 줄
   history?: string | null; // 이 종목 KIRS 리포트 이력 요약
   daysSince?: number | null;
+  today?: string;
 };
 
 export function buildBriefPrompt(c: BriefContext): string {
@@ -100,9 +101,10 @@ export function buildBriefPrompt(c: BriefContext): string {
     `[대상]`,
     `- 종목: ${c.report.name}${c.report.code ? ` (${c.report.code})` : ""} · 제목: ${c.report.title}`,
     `- 발간일: ${c.report.date}${c.daysSince != null ? ` (발간 후 ${c.daysSince}일 — 그 사이 변동 가능성 감안)` : ""}`,
+    ...(c.today ? [`- 오늘 날짜: ${c.today}`] : []),
     `- 작성자: ${c.analyst ?? c.report.author}${c.ra ? ` / RA: ${c.ra}` : ""}`,
     `- 작성 애널 프로파일: ${lens}`,
-    ...(c.trackRecord ? [`- 이 애널 리포트의 과거 성과(발간일 종가 → 이후 시장 대비 초과수익): ${c.trackRecord}`] : []),
+    ...(c.trackRecord ? [`- 이 애널 리포트의 과거 성과(발간일 종가 → 이후 시장 대비 초과수익, 이 리포트 발간 전에 결과가 확정된 것만): ${c.trackRecord}`] : []),
     ...(c.history ? [`- 이 종목 KIRS 리포트 이력: ${c.history}`] : []),
     ``,
     `[리포트 본문]`,

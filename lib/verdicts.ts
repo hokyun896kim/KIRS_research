@@ -111,7 +111,33 @@ export async function listBatches(): Promise<BatchRecord[]> {
 export const deleteBatch = async (id: string) => del(`batches/${id}.json`);
 
 // 분석 결과(마크다운)에서 모듈 7·8 판정을 뽑는다. 못 찾은 값은 null.
-export function parseVerdict(md: string): Pick<Verdict, "verdict" | "conviction" | "relative" | "baseUpside"> {
+type Parsed = Pick<Verdict, "verdict" | "conviction" | "relative" | "baseUpside">;
+
+// 프롬프트가 요구하는 고정 형식 마지막 줄:
+// [판정요약] 판정=필독 · 확신도=3.5/5 · 평소대비=강함 · 기준업사이드=+24.0%
+function parseSummaryLine(md: string): Parsed | null {
+  const line = md
+    .split("\n")
+    .reverse()
+    .find((l) => l.includes("[판정요약]"));
+  if (!line) return null;
+  const v = line.match(/판정\s*=\s*\**\s*(?:🔥|📌|⏭)?\s*(필독|참고|패스)/)?.[1] as Parsed["verdict"] | undefined;
+  const c = line.match(/확신도\s*=\s*([0-5](?:\.\d)?)/)?.[1];
+  const r = line.match(/평소\s*대비\s*=\s*(강함|평소|약함)/)?.[1] as Relative | undefined;
+  const u = line.match(/기준\s*업사이드\s*=\s*([+\-−]?\d+(?:\.\d+)?)\s*%/)?.[1];
+  if (!v && c == null) return null;
+  return {
+    verdict: v ?? null,
+    conviction: c != null ? Number(c) : null,
+    relative: r ?? null,
+    baseUpside: u != null ? Number(u.replace("−", "-")) / 100 : null,
+  };
+}
+
+export function parseVerdict(md: string): Parsed {
+  const fixed = parseSummaryLine(md);
+  if (fixed) return fixed;
+  // 요약 줄이 없을 때(이전 프롬프트·중간에 끊긴 답변): 모듈 7·8 본문에서 찾는다
   const i7 = md.search(/모듈\s*7/);
   const i8 = md.search(/모듈\s*8/);
   const m7 = i7 >= 0 ? md.slice(i7, i8 > i7 ? i8 : undefined) : md;

@@ -4,6 +4,7 @@ import { matchProfile, counterProfile } from "@/lib/profiles";
 import { classifySector } from "@/lib/sector";
 import { buildPrompt, buildCounterPrompt } from "@/lib/prompt";
 import { getGuideline } from "@/lib/guideline-loader";
+import { getAnalysisContext } from "@/lib/analysis-context";
 import type { ExtractResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -25,14 +26,15 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const { pages, text } = await extractPdf(url);
+    // 복붙 프롬프트에도 성적·이력을 넣되, 캐시가 식어 느리면 빼고 바로 응답
+    const [{ pages, text }, context] = await Promise.all([extractPdf(url), getAnalysisContext(report, 4000)]);
     const { analyst, ra } = detectAuthors(text);
     const profile = matchProfile(analyst ?? report.author);
     const raProfile = ra ? matchProfile(ra) : undefined;
     const sector = classifySector(report.name, report.title);
     const guideline = getGuideline();
 
-    const base = { guideline, report, analyst, ra, profile, raProfile, pdfText: text, sector: sector.label };
+    const base = { guideline, report, analyst, ra, profile, raProfile, pdfText: text, sector: sector.label, context };
     const counterLens =
       matchProfile(sp.get("lens")) ?? counterProfile(profile, [analyst, ra].filter((x): x is string => !!x));
     const body: ExtractResponse = {

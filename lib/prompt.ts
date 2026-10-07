@@ -1,4 +1,5 @@
 import type { Profile } from "./profiles";
+import type { AnalysisContext } from "./analysis-context";
 
 export type PromptInput = {
   guideline: string; // guideline.md 전문
@@ -11,21 +12,53 @@ export type PromptInput = {
   mode: "full" | "trade";
   sector?: string; // 자동분류 섹터 (힌트)
   attachedPdf?: boolean; // true면 본문 텍스트 대신 첨부 PDF 원본을 읽게 함 (AI 자동분석)
+  context?: AnalysisContext; // 오늘 날짜·작성 애널 과거 성과·이 종목 이력
 };
 
-function daysSince(dateStr: string): number | null {
+function daysSince(dateStr: string, today?: string): number | null {
   const m = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
-  const d = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
-  return Math.floor((Date.now() - d) / 86400000);
+  const t = today?.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const now = t ? Date.UTC(+t[1], +t[2] - 1, +t[3]) : Date.now();
+  return Math.floor((now - Date.UTC(+m[1], +m[2] - 1, +m[3])) / 86400000);
 }
 
-// 지침(guideline.md)은 커스텀 GPT 8,000자 한도에 맞춰져 있어 손대지 않고, 앱 전용 모듈을 뒤에 붙인다.
+function agedNote(date: string, today?: string): string {
+  const days = daysSince(date, today);
+  return days != null && days >= 30 ? `  ⚠ 발간 후 ${days}일 경과 — 공시·실적·시장 변동 확인 필요` : "";
+}
+
+// [이번 분석 대상]에 붙는 참고 자료 줄. 이전 리포트는 제목만 주므로 내용을 추측하지 말라고 못 박는다.
+function contextLines(c: AnalysisContext | undefined, author: string): string[] {
+  if (!c) return [];
+  return [
+    `- 오늘 날짜: ${c.today}`,
+    c.trackRecord
+      ? `- ${author} 리포트의 과거 성과 (발간일 종가 → 소속 시장 대비 초과수익, 이 리포트 발간일 전에 결과가 확정된 것만): ${c.trackRecord}`
+      : `- ${author} 리포트의 과거 성과: 표본 부족 또는 조회 실패 — 성과 보정 없이 프로파일로만 판단`,
+    ...(c.history == null
+      ? []
+      : c.history.length
+        ? [`- 이 종목의 이전 KIRS 리포트 (제목만 제공, 내용 추측 금지):`, ...c.history.map((h) => `    · ${h}`)]
+        : [`- 이 종목의 이전 KIRS 리포트: 없음 (이번이 첫 커버리지)`]),
+  ];
+}
+
+// 성적표 "AI 판정 검증"이 읽는 고정 형식 마지막 줄 (lib/verdicts.ts parseVerdict)
+const SUMMARY_LINE = [
+  `### 마지막 줄 — 판정 요약 (형식 고정)`,
+  `- 답변의 맨 마지막에 아래 형식 그대로 한 줄을 출력할 것. 값만 바꾸고 다른 말을 붙이지 말 것.`,
+  `[판정요약] 판정=필독|참고|패스 · 확신도=N/5 · 평소대비=강함|평소|약함 · 기준업사이드=+NN.N%`,
+  `- 기준업사이드는 모듈 8 기준 시나리오의 발간일 주가 대비 %. 계산할 수 없으면 "기준업사이드=확실하지않음".`,
+];
+
+// 지침(guideline.md)은 리포트 한 편 분석에 쓰는 부분만 남겼고, 앱 전용 모듈을 뒤에 붙인다.
 function extraModules(mode: "full" | "trade"): string[] {
   return [
     `[추가 모듈 — 뉘앙스·상승여력]`,
     `### 모듈 7. 뉘앙스·확신도 판독 ("진짜 봐야 하는 리포트인가")`,
     `- 기준선: 위 적용 프로파일(유형·스탠스·문법)을 이 애널의 평소 톤으로 보고, 이번 리포트가 평소보다 강한지 / 평소 수준인지 / 약한지 판정.`,
+    `- 성과 보정: [이번 분석 대상]의 과거 성과를 함께 볼 것. 시장 대비 부진한 애널의 강한 톤은 한 단계 할인하고, 성과가 좋은 애널이 평소보다 강하게 쓰면 가중. 보정했다면 이유를 한 줄로 적을 것.`,
     `- 확신 신호: 단정형 서술, 강조 어휘(독보적·유일·원년·사상 최대·본격화·가시화 등), 숫자로 뒷받침된 주장, 제목·요약(■)·결론에서 반복되는 강조 → 원문 그대로 인용 3~5개.`,
     `- 유보 신호: "~할 전망/가능성/기대/예상", 조건부 서술, 숫자 없는 옵션 → 원문 인용 2~4개.`,
     `- 리스크 서술: 분량과 구체성(숫자·시점 제시 여부). 짧고 형식적이면 확신 높음, 길고 구체적이면 경계 신호.`,
@@ -46,14 +79,15 @@ function extraModules(mode: "full" | "trade"): string[] {
     `- 8-3 실현 조건: 기준 시나리오에 필요한 촉매(필터 3-A), 사용자가 확인할 항목(3-B는 "사용자확인"), 하방 시나리오의 다운사이드 %.`,
     `- 8-4 모듈 7과 교차: 확신도는 높은데 업사이드가 작거나(이미 반영), 업사이드는 큰데 확신도가 낮은(근거 약함) 경우를 짚을 것.`,
     `- 필요한 숫자가 리포트에 없으면 지어내지 말고 "확실하지 않음"으로 두고, 계산 가능한 시나리오만 제시.`,
+    ``,
+    ...SUMMARY_LINE,
   ];
 }
 
 export function buildPrompt(i: PromptInput): string {
   const { report, profile, raProfile, analyst, ra } = i;
   const code = report.code ? ` (${report.code})` : "";
-  const days = daysSince(report.date);
-  const aged = days != null && days >= 30 ? `  ⚠ 발간 후 ${days}일 경과 — 공시·실적·시장 변동 확인 필요` : "";
+  const aged = agedNote(report.date, i.context?.today);
   const coAuthored = !!(profile && raProfile);
 
   const profileBlock = profile
@@ -103,19 +137,17 @@ export function buildPrompt(i: PromptInput): string {
     profileBlock,
     ...(raLine ? [raLine] : []),
     modeLine,
+    ...contextLines(i.context, analyst ?? report.author),
     ``,
     `[STEP 0 / STEP 1 적용]`,
     stepLine,
     ``,
     `지시:`,
-    `1) 먼저 공통 3대 필터(본업 vs 옵션 / 시간축 / 밸류+촉매)를 적용해 모듈 1·3에 반영하세요.`,
+    `1) [실행 지침]의 운영 규칙(5장)을 그대로 따르세요.`,
     i.mode === "trade"
-      ? `2) 모듈 1~5를 출력한 뒤 모듈 6을 자동 실행하고, 이어서 아래 [추가 모듈] 7·8을 출력하세요.`
-      : `2) 모듈 1~5를 모두 출력하고, 이어서 아래 [추가 모듈] 7·8을 출력하세요.`,
-    `3) 모듈 2는 원퀘스천으로 시작하세요.`,
-    `4) 신뢰/검증 영역은 이 리포트의 구체 내용으로 작성하고 일반론은 금지합니다.`,
-    `5) 모듈 4의 [B], 필터 3-B는 답하지 말고 "사용자확인"으로 표시하세요.`,
-    `6) 추측과 분석을 구분하고, 불확실한 숫자는 "확실하지 않음"으로 표시하세요.`,
+      ? `2) 출력 순서: 모듈 1~6 → [추가 모듈] 7·8 → 마지막 [판정요약] 한 줄.`
+      : `2) 출력 순서: 모듈 1~5 → [추가 모듈] 7·8 → 마지막 [판정요약] 한 줄.`,
+    `3) 오늘 날짜·과거 성과·이전 리포트는 판단 보조 자료입니다. 리포트 본문에 없는 사실을 지어내지 마세요.`,
     ``,
     ...extraModules(i.mode),
     ``,
@@ -134,8 +166,7 @@ export type CounterPromptInput = Omit<PromptInput, "mode"> & { lens: Profile };
 export function buildCounterPrompt(i: CounterPromptInput): string {
   const { report, profile, analyst, ra, lens } = i;
   const code = report.code ? ` (${report.code})` : "";
-  const days = daysSince(report.date);
-  const aged = days != null && days >= 30 ? `  ⚠ 발간 후 ${days}일 경과 — 공시·실적·시장 변동 확인 필요` : "";
+  const aged = agedNote(report.date, i.context?.today);
   const SEP = "─".repeat(34);
 
   return [
@@ -163,6 +194,7 @@ export function buildCounterPrompt(i: CounterPromptInput): string {
     `    · 주의/검증: ${lens.caution}`,
     `    · 문법·키워드: ${lens.keyword}`,
     `- 출력 모드: 반론모드`,
+    ...contextLines(i.context, analyst ?? report.author),
     ``,
     `[반론 검토 지시]`,
     `1) 첫 줄은 반론 렌즈의 원퀘스천을 이 종목에 맞게 바꿔 던지며 시작하세요.`,
@@ -197,7 +229,12 @@ function monthsBetween(a: string, b: string): number | null {
 
 // 비교모드: 같은 종목의 이번 리포트와 이전 리포트를 나란히 놓고 "무엇이 바뀌었나"를 판독한다.
 // PDF를 첨부할 때는 문서 1 = 이번, 문서 2 = 이전 순서로 넣는다.
-export function buildComparePrompt(i: { current: CompareSide; previous: CompareSide; attachedPdf?: boolean }): string {
+export function buildComparePrompt(i: {
+  current: CompareSide;
+  previous: CompareSide;
+  attachedPdf?: boolean;
+  today?: string;
+}): string {
   const { current: cur, previous: prev } = i;
   const SEP = "─".repeat(34);
   const code = cur.report.code ? ` (${cur.report.code})` : "";
@@ -216,6 +253,7 @@ export function buildComparePrompt(i: { current: CompareSide; previous: CompareS
     `- 이번 리포트: ${cur.report.date} · "${cur.report.title}" · 작성 ${lens(cur)}`,
     `- 이전 리포트: ${prev.report.date} · "${prev.report.title}" · 작성 ${lens(prev)}`,
     `- 간격: ${gap != null ? `약 ${gap}개월` : "확실하지 않음"}${sameAuthor ? " · 같은 애널리스트" : " · 작성자가 바뀜"}`,
+    ...(i.today ? [`- 오늘 날짜: ${i.today}${agedNote(cur.report.date, i.today)}`] : []),
     ``,
     `[비교 지시]`,
     `1) 첫 줄 요약: "이전 대비 ○○ — 톤 상향/유지/하향" 한 줄.`,
