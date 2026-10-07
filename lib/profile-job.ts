@@ -262,4 +262,141 @@ export async function proposeProfiles(only?: string[]) {
 }
 
 export const getProposal = () => readJson<Proposal>(PROPOSAL);
+
+// ── 3단계: 보정 ──
+// 1차 제안은 KIRS 공통 문체(목표주가 없음·리스크 말미·피어 비교·'판단된다/할 경우' 병기)를 개인 특징으로 읽어
+// 16명 중 11명이 조건부기대형으로 쏠렸다. 공통 문체를 기준선으로 빼고, 16명을 함께 놓고 겹치지 않게 다시 배정한다.
+const CALIBRATED = "profiles/v1/calibrated.json";
+export const HOUSE_STYLE = [
+  "목표주가·투자의견을 내지 않는다",
+  "밸류는 피어 PER/PBR·과거 밴드 비교로만 말한다",
+  "리스크는 말미 별도 섹션에 짧고 정성적으로 두고 곧바로 완화 논리를 붙인다",
+  "'~로 판단된다' 같은 단정과 '~할 경우' 같은 조건을 한 문단에 함께 쓴다",
+  "기업개요→투자포인트→실적 전망→밸류→리스크 순서를 따른다",
+];
+
+type Assign = { author: string; type: string; stance: string; ratio: string; core: string };
+const ASSIGN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["assignments"],
+  properties: {
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["author", "type", "stance", "ratio", "core"],
+        properties: {
+          author: str("애널 이름"),
+          type: str("유형 이름 — 16명끼리 겹치지 않게"),
+          stance: str(`${STANCES.join("/")} 중 하나 + (지형NN/트리거NN)`),
+          ratio: str("지형/트리거 'NN/NN'"),
+          core: str("다른 애널과 구별되는 핵심 습관 한 문장"),
+        },
+      },
+    },
+  },
+} as const;
+
+function toneStats(recs: ObsRecord[]) {
+  const by = new Map<string, ObsRecord[]>();
+  for (const r of recs) by.set(r.author, [...(by.get(r.author) ?? []), r]);
+  const rows = [...by.entries()].map(([author, l]) => {
+    const co = new Map<string, number>();
+    for (const r of l) {
+      const n = r.obs.coAuthor?.match(/[가-힣]{3}/)?.[0];
+      if (n && n !== author) co.set(n, (co.get(n) ?? 0) + 1);
+    }
+    return {
+      author,
+      n: l.length,
+      tone: l.reduce((a, r) => a + r.obs.toneLevel, 0) / l.length,
+      coAuthors: [...co.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}건`),
+    };
+  });
+  rows.sort((a, b) => b.tone - a.tone);
+  return rows.map((r, i) => ({ ...r, toneRank: `${i + 1}/${rows.length}` }));
+}
+
+export async function calibrateProfiles() {
+  const [proposal, recs, facts] = await Promise.all([getProposal(), allObservations(), getAnalystFacts()]);
+  if (!proposal) throw new Error("proposal 없음");
+  const stats = toneStats(recs);
+  const client = new Anthropic();
+  const parse = (m: Anthropic.Message) => {
+    const b = m.content.find((c) => c.type === "text");
+    return JSON.parse(b && b.type === "text" ? b.text : "{}");
+  };
+
+  // 1) 16명을 한 번에 보고 유형·스탠스를 겹치지 않게 배정
+  const peerTable = Object.entries(proposal.profiles).map(([author, p]) => ({
+    author,
+    proposed: { type: p.type, stance: p.stance, keyword: p.keyword, caution: p.caution },
+    old: matchProfile(author) ? { type: matchProfile(author)!.type, stance: matchProfile(author)!.stance } : null,
+    tone: stats.find((s) => s.author === author),
+    sectors: facts[author]?.sectors,
+  }));
+  const m1 = await client.messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 6000,
+    thinking: THINKING_OFF,
+    messages: [
+      {
+        role: "user",
+        content: [
+          `KIRS 리포트 애널 ${peerTable.length}명의 1차 프로필 제안을 보정합니다. 1차 제안은 아래 KIRS 공통 문체를 개인 특징으로 오인해 대부분 '조건부기대형'으로 쏠렸습니다.`,
+          `[KIRS 공통 문체 — 모든 애널에 해당하므로 구별 근거로 쓰지 말 것]`,
+          ...HOUSE_STYLE.map((h) => `- ${h}`),
+          ``,
+          `할 일: 16명 각각에 유형·스탠스·지형/트리거 비중·핵심 습관(core)을 다시 배정하세요.`,
+          `- 스탠스는 유보 표현이 아니라 투자 논리의 뼈대로 고릅니다: 구조확신형=산업·해자 구조가 결론의 근거, 조건부기대형=특정 조건 충족이 결론의 전제, 발굴소개형=덜 알려진 기업 소개가 목적, 턴어라운드기대형=부진 후 반등·마진 회복, 이벤트대기형=임상·수주·인허가 같은 이벤트.`,
+          `- 다섯 스탠스가 고르게 쓰이도록 상대 비교로 정하되, 근거 없이 억지로 나누지는 마세요. 한 스탠스에 5명 넘게 몰리면 다시 보세요.`,
+          `- 유형 이름은 서로 겹치지 않게. 기존 이름이 여전히 맞으면 유지하세요.`,
+          `- tone은 리포트별 확신 톤(1~5) 평균과 순위입니다. 상대적으로 높으면 확신 쪽, 낮으면 유보 쪽 근거로 쓰세요.`,
+          `- 성과·적중률은 쓰지 마세요.`,
+          ``,
+          JSON.stringify(peerTable),
+        ].join("\n"),
+      },
+    ],
+    output_config: { format: { type: "json_schema", schema: ASSIGN_SCHEMA as unknown as Record<string, unknown> } },
+  });
+  const assigns = (parse(m1).assignments ?? []) as Assign[];
+
+  // 2) 배정을 받아 애널별로 다시 쓰기 (공통 문체는 빼고, 구별되는 점 위주)
+  const peers = assigns.map((a) => `${a.author}: ${a.type} / ${a.stance} — ${a.core}`).join("\n");
+  const results = await pool(assigns, 4, async (a) => {
+    const p = proposal.profiles[a.author];
+    const t = stats.find((s) => s.author === a.author);
+    const m = await client.messages.create({
+      model: ANALYSIS_MODEL,
+      max_tokens: 4000,
+      thinking: THINKING_OFF,
+      messages: [
+        {
+          role: "user",
+          content: [
+            `${a.author}의 렌즈 프로필을 최종본으로 다시 쓰세요. 유형·스탠스·비중은 아래 배정을 따르세요.`,
+            `[배정] ${JSON.stringify(a)}`,
+            `[KIRS 공통 문체 — 프로필에 쓰지 말 것. 이 애널이 여기서 벗어나는 점만 쓰기]`,
+            ...HOUSE_STYLE.map((h) => `- ${h}`),
+            `[다른 애널 배정 — 겹치지 않게 차별점을 살릴 것]`,
+            peers,
+            `[1차 제안] ${JSON.stringify(p)}`,
+            `[데이터] 톤 평균 ${t?.tone.toFixed(2)} (순위 ${t?.toneRank}), 자주 함께 쓴 RA: ${t?.coAuthors.join(", ") || "없음"}, 섹터 ${JSON.stringify(facts[a.author]?.sectors ?? [])}`,
+            `규칙: 성과·적중률 숫자는 쓰지 않는다. signals는 이 애널에게만 해당하는 읽기 신호 2~4개. changes에는 기존 도감 대비 바꾼 점과 근거.`,
+          ].join("\n"),
+        },
+      ],
+      output_config: { format: { type: "json_schema", schema: PROFILE_SCHEMA as unknown as Record<string, unknown> } },
+    });
+    return { author: a.author, p: { ...(parse(m) as ProposedProfile), type: a.type, stance: a.stance, ratio: a.ratio }, samples: p?.samples ?? 0, core: a.core, tone: t };
+  });
+  const out = { createdAt: new Date().toISOString(), model: ANALYSIS_MODEL, houseStyle: HOUSE_STYLE, profiles: Object.fromEntries(results.map((r) => [r.author, { ...r.p, samples: r.samples, core: r.core, tone: r.tone }])) };
+  await putJson(CALIBRATED, out);
+  return { calibrated: results.map((r) => `${r.author}: ${r.p.type} / ${r.p.stance}`) };
+}
+
+export const getCalibrated = () => readJson<Record<string, unknown>>(CALIBRATED);
 export const getObservations = allObservations;

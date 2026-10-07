@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { blobEnabled } from "@/lib/verdicts";
-import { getJobState, getObservations, getProposal, proposeProfiles, submitGroup, syncBatches } from "@/lib/profile-job";
+import { calibrateProfiles, getCalibrated, getJobState, getObservations, getProposal, proposeProfiles, submitGroup, syncBatches } from "@/lib/profile-job";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const maxDuration = 300;
 export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as {
     key?: string;
-    action?: "submit" | "sync" | "propose" | "get";
+    action?: "submit" | "sync" | "propose" | "calibrate" | "get";
     group?: number;
     groups?: number;
     dryRun?: boolean;
@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ batches: await syncBatches() });
       case "propose":
         return NextResponse.json(await proposeProfiles(b.authors));
+      case "calibrate":
+        return NextResponse.json(await calibrateProfiles());
       case "get":
         return NextResponse.json({ state: await getJobState(), proposal: await getProposal(), observations: await getObservations() });
       default:
@@ -46,6 +48,6 @@ export async function GET(req: NextRequest) {
   const keys = [process.env.ADMIN_KEY, process.env.JOB_KEY].filter(Boolean);
   if (!keys.includes(sp.get("key") ?? "")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const what = sp.get("what");
-  const body = what === "observations" ? await getObservations() : await getProposal();
+  const body = what === "observations" ? await getObservations() : what === "calibrated" ? await getCalibrated() : await getProposal();
   return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }
