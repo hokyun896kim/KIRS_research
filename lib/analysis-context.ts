@@ -33,8 +33,20 @@ const dayNum = (d: string) => {
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400_000 : NaN;
 };
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T | null> {
+  const t0 = Date.now();
+  return Promise.race([
+    p.catch((e) => {
+      console.warn(`[analysis-context] ${label} failed after ${Date.now() - t0}ms: ${(e as Error).message}`);
+      return null;
+    }),
+    new Promise<null>((r) =>
+      setTimeout(() => {
+        console.warn(`[analysis-context] ${label} timed out after ${ms}ms`);
+        r(null);
+      }, ms)
+    ),
+  ]);
 }
 
 async function trackRecordOf(author: string, asOf: string): Promise<string | null> {
@@ -69,8 +81,8 @@ export async function getAnalysisContext(
   timeoutMs = 8000
 ): Promise<AnalysisContext> {
   const [trackRecord, history] = await Promise.all([
-    withTimeout(trackRecordOf(r.author, r.date), timeoutMs),
-    withTimeout(historyOf(r.code, r.name, r.date, r.title), timeoutMs),
+    withTimeout("trackRecord", trackRecordOf(r.author, r.date), timeoutMs),
+    withTimeout("history", historyOf(r.code, r.name, r.date, r.title), timeoutMs),
   ]);
   return { today: todayKST(), trackRecord, history };
 }
