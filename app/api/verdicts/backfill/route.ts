@@ -5,6 +5,7 @@ import { loadReport } from "@/lib/report-input";
 import { blobEnabled, listBatches, listVerdicts, saveBatch } from "@/lib/verdicts";
 import { FAIR_SINCE, batchParams, buildVerdictPrompt, customIdFor, estimateCostUSD } from "@/lib/backfill";
 import { pool } from "@/lib/pool";
+import { getAnalysisContext } from "@/lib/analysis-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,8 +35,10 @@ export async function POST(req: NextRequest) {
 
   const loaded = await pool(pick, 6, async (r) => {
     try {
-      const L = await loadReport(r.pdfUrl!, { name: r.name, code: r.code, title: r.title, date: r.date, author: r.author });
-      return { no: r.no!, prompt: buildVerdictPrompt(L.report, L.profile, L.analyst, L.text) };
+      const meta = { name: r.name, code: r.code, title: r.title, date: r.date, author: r.author };
+      const ctx = await getAnalysisContext(meta); // PDF 파싱보다 먼저 (analysis-context.ts)
+      const L = await loadReport(r.pdfUrl!, meta);
+      return { no: r.no!, prompt: buildVerdictPrompt(L.report, L.profile, L.analyst, L.text, ctx) };
     } catch {
       return null;
     }
