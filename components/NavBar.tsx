@@ -8,13 +8,24 @@ const LINKS = [
   { href: "/scorecard", label: "애널 성적표" },
 ];
 
-// 렌즈 모양 로고 (파란 원 + 손잡이)
+// 앱 아이콘(app/icon.svg)과 같은 모양: 파란 바탕 렌즈 + 오르는 막대
 function Logo() {
   return (
-    <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden>
-      <rect width="28" height="28" rx="8" fill="#3182f6" />
-      <circle cx="12.5" cy="12.5" r="5.5" fill="none" stroke="#fff" strokeWidth="2.6" />
-      <path d="M16.6 16.6 21 21" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+    <svg viewBox="0 0 1024 1024" className="h-7 w-7" aria-hidden>
+      <defs>
+        <linearGradient id="nav-logo" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#4b9bff" />
+          <stop offset="1" stopColor="#1b64da" />
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" rx="232" fill="url(#nav-logo)" />
+      <g transform="translate(512 512) scale(1.02) translate(-492 -492)">
+        <circle cx="448" cy="448" r="206" fill="none" stroke="#fff" strokeWidth="92" />
+        <path d="M600 600 L742 742" stroke="#fff" strokeWidth="112" strokeLinecap="round" />
+        <rect x="364" y="420" width="46" height="112" rx="16" fill="#fff" fillOpacity=".7" />
+        <rect x="426" y="376" width="46" height="156" rx="16" fill="#fff" fillOpacity=".85" />
+        <rect x="488" y="330" width="46" height="202" rx="16" fill="#ff5c6c" />
+      </g>
     </svg>
   );
 }
