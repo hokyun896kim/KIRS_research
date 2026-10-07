@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// 팝업 상단 바이사이드 냉정 브리핑: 저장돼 있으면 즉시, 없으면 생성(1분 안팎) 후 저장
+// 팝업 상단 바이사이드 냉정 브리핑: 저장돼 있으면 즉시, 없으면 생성(30초 안팎) 후 저장
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const url = sp.get("url");

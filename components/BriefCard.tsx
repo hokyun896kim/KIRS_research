@@ -133,8 +133,8 @@ export default function BriefCard({ report }: { report: Report }) {
                 <div className="h-4 w-11/12 animate-pulse rounded bg-white/15" />
                 <div className="h-4 w-2/3 animate-pulse rounded bg-white/15" />
                 <div className="pt-1 text-xs text-white/60">
-                  리포트를 읽고 냉정하게 판단하는 중… 처음 여는 리포트는 1분
-                  정도 걸리고, 이후엔 바로 떠요.
+                  리포트를 읽고 냉정하게 판단하는 중… 처음 여는 리포트는 30초
+                  안팎 걸리고, 이후엔 바로 떠요.
                 </div>
               </div>
             )}
