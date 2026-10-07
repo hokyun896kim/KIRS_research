@@ -17,8 +17,10 @@ const MAX_LIMIT = 80; // 한 번에 PDF 추출할 수 있는 양 (300초 안)
 // body: { key, since?: "YYYY-MM-DD", limit?: number, dryRun?: boolean }
 export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as { key?: string; since?: string; limit?: number; dryRun?: boolean };
-  if (!process.env.ADMIN_KEY) return NextResponse.json({ error: "서버에 ADMIN_KEY가 설정되지 않았어요." }, { status: 503 });
-  if (b.key !== process.env.ADMIN_KEY) return NextResponse.json({ error: "관리자 키가 맞지 않아요." }, { status: 401 });
+  // ADMIN_KEY(관리자 패널) 또는 일회성 작업용 JOB_KEY
+  const keys = [process.env.ADMIN_KEY, process.env.JOB_KEY].filter(Boolean);
+  if (!keys.length) return NextResponse.json({ error: "서버에 ADMIN_KEY가 설정되지 않았어요." }, { status: 503 });
+  if (!b.key || !keys.includes(b.key)) return NextResponse.json({ error: "관리자 키가 맞지 않아요." }, { status: 401 });
   if (!blobEnabled()) return NextResponse.json({ error: "Blob 저장소가 연결되지 않았어요." }, { status: 503 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
 
