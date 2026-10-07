@@ -5,7 +5,7 @@
 | 원본 | 쓰는 곳 |
 |---|---|
 | `icon-round.svg` | `app/icon.svg`, `public/icons/icon-192.png`, `icon-512.png` (모서리 투명) |
-| `icon-full.svg` | `app/apple-icon.png` 180px (iOS가 직접 둥글림, 투명 금지). 같은 파일을 `public/apple-touch-icon.png`·`-precomposed.png`에도 둔다 — iOS가 링크 태그 없이 기본 경로부터 찾는 경우가 있어서 |
+| `icon-full.svg` | `public/icons/apple-touch-icon-v2.png` 180px (layout.tsx의 metadata.icons.apple로 연결, 모양을 바꾸면 -v3로 이름을 올릴 것) (iOS가 직접 둥글림, 투명 금지). 같은 파일을 `public/apple-touch-icon.png`·`-precomposed.png`에도 둔다 — iOS가 링크 태그 없이 기본 경로부터 찾는 경우가 있어서 |
 | `icon-maskable.svg` | `public/icons/icon-maskable-512.png` (안드로이드 마스크, 글리프를 안전영역 안으로 줄임) |
 | `icon-small.svg` | `app/favicon.ico` 16·32·48px (선을 굵게) |
 
