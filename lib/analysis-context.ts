@@ -35,6 +35,8 @@ const dayNum = (d: string) => {
 
 function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const t0 = Date.now();
+  p.then(() => console.log(`[analysis-context] ${label} resolved in ${Date.now() - t0}ms`)).catch(() => {});
   return Promise.race([
     p.catch((e) => {
       console.warn(`[analysis-context] ${label} failed: ${(e as Error).message}`);
