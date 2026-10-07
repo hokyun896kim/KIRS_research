@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAllowedPdfUrl } from "@/lib/kirs";
 import { metaFrom } from "@/lib/report-input";
 import { createBrief, getCachedBrief } from "@/lib/brief-service";
+import { getCohort, tierOf } from "@/lib/score-tiers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +17,13 @@ export async function GET(req: NextRequest) {
   if (!isAllowedPdfUrl(url)) return NextResponse.json({ error: "domain not allowed" }, { status: 400 });
   if (!/^[0-9A-Za-z-]{1,20}$/.test(no)) return NextResponse.json({ error: "no required" }, { status: 400 });
 
-  const hit = await getCachedBrief(no);
-  if (hit) return NextResponse.json({ ...hit, cached: true });
+  // tier = 화면에 보이는 필독·참고·패스 (긍정 가능성의 상대 순위, lib/score-tiers.ts)
+  const [hit, cohort] = await Promise.all([getCachedBrief(no), getCohort()]);
+  if (hit) return NextResponse.json({ ...hit, tier: tierOf(hit.brief.positiveOdds, cohort), cached: true });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
   try {
-    return NextResponse.json({ ...(await createBrief(no, url, metaFrom((k) => sp.get(k)))), cached: false });
+    const made = await createBrief(no, url, metaFrom((k) => sp.get(k)));
+    return NextResponse.json({ ...made, tier: tierOf(made.brief.positiveOdds, cohort), cached: false });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

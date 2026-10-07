@@ -273,9 +273,9 @@ export default function ReportList() {
         <div className="mt-5 hidden grid-cols-[minmax(0,1fr)_180px_88px] gap-4 border-b border-g100 px-2 pb-2 text-[13px] text-g500 md:grid">
           <span>종목 · 리포트</span>
           <span>애널리스트 · 6개월 승률</span>
-          <span className="text-right">긍정 가능성</span>
+          <span className="text-right" title="필독·패스 = 긍정 가능성 상위·하위 20%">긍정 가능성</span>
         </div>
-        <p className="mt-4 text-[12px] text-g500 md:hidden">오른쪽 숫자는 AI가 본 긍정 결론 가능성이에요.</p>
+        <p className="mt-4 text-[12px] text-g500 md:hidden">오른쪽 숫자는 AI가 본 긍정 결론 가능성이에요. 필독·패스는 그 상위·하위 20%예요.</p>
 
         <ul className="mt-1">
           {loading &&

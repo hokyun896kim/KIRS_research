@@ -66,7 +66,7 @@ export default function VerdictCheck({ h, hLabel }: { h: HorizonKey; hLabel: str
 
   return (
     <Block>
-      <BlockTitle sub="AI가 필독이라고 한 리포트, 정말 시장보다 더 올랐을까요?">AI 판정 검증</BlockTitle>
+      <BlockTitle sub="AI가 본 긍정 가능성 상위 20%(필독), 정말 시장보다 더 올랐을까요?">AI 판정 검증</BlockTitle>
 
       <button
         onClick={() => setAll((v) => !v)}
@@ -112,7 +112,7 @@ export default function VerdictCheck({ h, hLabel }: { h: HorizonKey; hLabel: str
           </div>
           {g && g.overall.n > 0 ? (
             <div className="grid gap-3 md:grid-cols-3">
-              <GroupList title={`판정별 · ${hLabel} 뒤 시장 대비`} groups={[...g.byVerdict, g.overall]} />
+              <GroupList title={`판정별(긍정 가능성 순위) · ${hLabel} 뒤 시장 대비`} groups={[...g.byVerdict, g.overall]} />
               <GroupList title={`확신도별 · ${hLabel}`} groups={g.byConviction} />
               <GroupList title={`AI 역산 업사이드별 · ${hLabel}`} groups={g.byUpside} />
             </div>

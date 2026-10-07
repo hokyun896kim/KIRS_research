@@ -2,7 +2,8 @@ import "server-only";
 import { put, list, del, get } from "@vercel/blob";
 
 // AI 판정 저장소 (Vercel Blob). 판정 값을 경로에 넣어 두면 list() 한 번으로 전부 읽을 수 있다.
-//   verdicts/v1/{no}__{mode}__{verdict}__{conviction}__{relative}__{upside}__{ts}.json
+//   verdicts/v1/{no}__{mode}__{verdict}__{conviction}__{relative}__{upside}__{score}__{ts}.json
+//   (score 칸이 없는 7칸짜리는 2026-10 이전 기록)
 
 export type VerdictLabel = "필독" | "참고" | "패스";
 export type Relative = "강함" | "평소" | "약함";
@@ -15,6 +16,7 @@ export type Verdict = {
   conviction: number | null; // 1~5
   relative: Relative | null; // 애널 평소 톤 대비
   baseUpside: number | null; // 기준 시나리오 업사이드 (0.564 = +56.4%)
+  score?: number | null; // 긍정 가능성 0~100 (브리핑·일괄 판정)
   createdAt: string;
 };
 
@@ -62,6 +64,7 @@ export async function saveVerdict(v: Verdict, detail?: Record<string, unknown>) 
     f(v.conviction),
     v.relative ? R_CODE[v.relative] : "na",
     v.baseUpside == null ? "na" : f(v.baseUpside * 100),
+    v.score == null ? "na" : String(Math.round(v.score)),
     Date.parse(v.createdAt) || Date.now(),
   ].join("__");
   await putJson(`verdicts/v1/${name}.json`, { ...v, ...detail });
@@ -84,8 +87,10 @@ export async function listVerdicts(): Promise<Verdict[]> {
   return (await listAll("verdicts/v1/"))
     .map(({ pathname }): Verdict | null => {
       const parts = pathname.replace(/^verdicts\/v1\//, "").replace(/\.json$/, "").split("__");
-      if (parts.length !== 7) return null;
-      const [no, mode, v, conv, rel, up, ts] = parts;
+      if (parts.length !== 7 && parts.length !== 8) return null;
+      const [no, mode, v, conv, rel, up] = parts;
+      const score = parts.length === 8 ? num(parts[6]) : null;
+      const ts = parts[parts.length - 1];
       return {
         no,
         mode: mode as VerdictMode,
@@ -93,6 +98,7 @@ export async function listVerdicts(): Promise<Verdict[]> {
         conviction: num(conv),
         relative: R_DEC[rel] ?? null,
         baseUpside: up === "na" ? null : Number(up) / 100,
+        score,
         createdAt: new Date(Number(ts)).toISOString(),
       };
     })

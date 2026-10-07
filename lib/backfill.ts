@@ -5,7 +5,7 @@ import type { ReportMeta } from "./report-input";
 import type { Relative, VerdictLabel } from "./verdicts";
 import type { AnalysisContext } from "./analysis-context";
 import { ANALYSIS_MODEL, THINKING_OFF } from "./model";
-import { VERDICT_RULE } from "./verdict-rule";
+import { POSITIVE_ODDS_RULE } from "./brief";
 
 // 과거 리포트 일괄 판정: 앱의 모듈 7(확신도)·8-2(기준 시나리오) 기준만 짧게, JSON으로 받는다.
 // 실시간 분석과 같은 모델로 판정해야 "AI 판정 검증" 통계가 한 모델 기준이 된다
@@ -18,6 +18,7 @@ export type BackfillResult = {
   conviction: number;
   relative: Relative;
   verdict: VerdictLabel;
+  positiveOdds: number; // 0~100, 브리핑과 같은 정의 — 필독·참고·패스는 이 점수의 상대 순위로 정한다 (lib/score-tiers.ts)
   valuation: Valuation;
   reason: string;
   evidence: string[];
@@ -48,11 +49,12 @@ export function upsideFrom(v?: Valuation | null): number | null {
 export const BACKFILL_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["conviction", "relative", "verdict", "valuation", "reason", "evidence"],
+  required: ["conviction", "relative", "verdict", "positiveOdds", "valuation", "reason", "evidence"],
   properties: {
     conviction: { type: "number", description: "확신도 1~5 (0.5 단위)" },
     relative: { type: "string", enum: ["강함", "평소", "약함"], description: "작성 애널 평소 톤 대비" },
     verdict: { type: "string", enum: ["필독", "참고", "패스"] },
+    positiveOdds: { type: "number", description: "0~100. 6~12개월 안에 리포트 핵심 투자포인트가 실적·공시로 확인될 가능성" },
     valuation: {
       type: "object",
       additionalProperties: false,
@@ -103,7 +105,7 @@ export function buildVerdictPrompt(
     `- 리스크 서술이 짧고 형식적이면 확신 높음, 길고 구체적이면 경계 신호.`,
     `- 과거 성과가 시장 대비 부진한 애널(평균 초과수익 음수·승률 50% 미만, 표본 10건 이상)의 강한 톤은 한 단계 할인하세요.`,
     `- conviction(1~5), relative(평소 톤 대비 강함/평소/약함), verdict(필독/참고/패스)를 정하세요.`,
-    ...VERDICT_RULE.map((r) => `- ${r}`),
+    `- positiveOdds: ${POSITIVE_ODDS_RULE}`,
     `- valuation: 기준 시나리오 적정주가 계산 재료만 적으세요(계산은 하지 않음). 주가·EPS·BPS는 원 단위, PER·PBR은 배. 적자라 PER을 못 쓰면 eps·targetPer는 null로 두고 PBR 재료를 적으세요.`,
     `- evidence는 본문에 실제로 있는 문장만 인용하세요.`,
     ``,

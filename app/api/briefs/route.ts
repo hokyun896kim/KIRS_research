@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCachedBrief } from "@/lib/brief-service";
 import { getContextSnapshot } from "@/lib/context-snapshot";
 import type { BriefsResponse } from "@/lib/types";
+import { getCohort, tierOf } from "@/lib/score-tiers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +15,10 @@ export async function GET(req: NextRequest) {
     .filter((n) => /^[0-9A-Za-z-]{1,20}$/.test(n))
     .slice(0, 40);
 
-  const [hits, snap] = await Promise.all([
+  const [hits, snap, cohort] = await Promise.all([
     Promise.all(nos.map((no) => getCachedBrief(no).catch(() => null))),
     getContextSnapshot().catch(() => null),
+    getCohort(),
   ]);
 
   const briefs: BriefsResponse["briefs"] = {};
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (!h) return;
     const b = h.brief;
     briefs[nos[i]] = {
-      verdict: b.verdict,
+      verdict: tierOf(b.positiveOdds, cohort), // 모델 라벨이 아니라 긍정 가능성의 상대 순위
       priority: b.priority,
       positiveOdds: b.positiveOdds,
       conviction: b.conviction,

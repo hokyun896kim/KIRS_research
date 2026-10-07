@@ -5,7 +5,8 @@ import type { Report } from "@/lib/types";
 import type { Brief } from "@/lib/brief";
 import { VerdictBadge, oddsBar, oddsTone } from "./ui";
 
-export type BriefRes = { brief: Brief; createdAt: string; model: string; cached: boolean };
+// tier = 화면에 보이는 필독·참고·패스. 모델 라벨이 아니라 긍정 가능성의 상대 순위 (서버 lib/score-tiers.ts)
+export type BriefRes = { brief: Brief; tier?: Brief["verdict"]; createdAt: string; model: string; cached: boolean };
 
 // 바이사이드 냉정 브리핑: 저장돼 있으면 바로, 없으면 서버가 만들어 저장 (30초 안팎)
 export function useBrief(report: Report) {
@@ -64,7 +65,7 @@ export function BriefHero({ res, err }: { res: BriefRes | null; err: string | nu
   return (
     <div className="rounded-3xl bg-g50 p-5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <VerdictBadge verdict={b.verdict} size="md" />
+        <VerdictBadge verdict={res.tier ?? b.verdict} size="md" />
         <span className="text-[13px] font-medium text-g600">
           검토 우선순위 {b.priority} · 확신도 <span className="num">{b.conviction}/5</span>
         </span>
@@ -78,7 +79,9 @@ export function BriefHero({ res, err }: { res: BriefRes | null; err: string | nu
         <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-g200">
           <div className={`h-full rounded-full ${oddsBar(b.positiveOdds)}`} style={{ width: `${b.positiveOdds}%` }} />
         </div>
-        <p className="mt-2 text-[12px] text-g500">6~12개월 안에 리포트 핵심 논리가 실적·공시로 확인될 확률 (50 = 반반)</p>
+        <p className="mt-2 text-[12px] text-g500">
+          6~12개월 안에 리포트 핵심 논리가 실적·공시로 확인될 확률 (50 = 반반). 필독·패스는 이 확률이 KIRS 리포트 중 상위·하위 20%라는 뜻이에요.
+        </p>
       </div>
     </div>
   );

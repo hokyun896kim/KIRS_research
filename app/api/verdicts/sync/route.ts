@@ -46,6 +46,7 @@ export async function GET() {
             conviction: Math.max(1, Math.min(5, j.conviction)),
             relative: j.relative,
             baseUpside,
+            score: typeof j.positiveOdds === "number" ? Math.max(0, Math.min(100, j.positiveOdds)) : null,
             createdAt: new Date().toISOString(),
           },
           { name: m?.name, code: m?.code, date: m?.date, author: m?.author, model: BACKFILL_MODEL, reason: j.reason, evidence: j.evidence, valuation: j.valuation }

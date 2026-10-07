@@ -32,7 +32,7 @@ export async function createBrief(no: string, url: string, report: ReportMeta): 
     await Promise.all([
       putJson(pathOf(no), out).catch(() => {}),
       saveVerdict(
-        { no, mode: "brief", verdict: brief.verdict, conviction: brief.conviction, relative: null, baseUpside: null, createdAt: out.createdAt },
+        { no, mode: "brief", verdict: brief.verdict, conviction: brief.conviction, relative: null, baseUpside: null, score: brief.positiveOdds, createdAt: out.createdAt },
         { name: report.name, code: report.code, date: report.date, author: report.author, model: BRIEF_MODEL, positiveOdds: brief.positiveOdds }
       ).catch(() => {}),
     ]);
