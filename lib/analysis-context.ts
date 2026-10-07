@@ -1,6 +1,5 @@
 import "server-only";
-import { getScorecard, type HorizonKey } from "./scorecard";
-import { findSameCompany } from "./history";
+import { getContextSnapshot, type ContextSnapshot } from "./context-snapshot";
 
 // 분석·브리핑 프롬프트에 붙이는 보조 자료: 오늘 날짜, 작성 애널의 과거 성적, 이 종목 KIRS 이력.
 // 성적·이력은 "그 리포트 발간일에 알 수 있었던 것"만 쓴다 — 과거 리포트를 판정할 때 미래 결과가 새지 않게.
@@ -16,12 +15,13 @@ const median = (xs: number[]) => {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-// 성적표 기간(거래일)을 넉넉한 달력일로 — 발간일 기준 이 기간이 지난 리포트만 "결과가 확정된" 것으로 본다
-const HORIZON_DAYS: [HorizonKey, number][] = [
-  ["3M", 95],
-  ["6M", 185],
-  ["12M", 370],
-];
+// 성적표 기간(거래일)을 넉넉한 달력일로 — 발간일 기준 이 기간이 지난 리포트만 "결과가 확정된" 것으로 본다.
+// 값은 스냅샷 track 행의 열 번호 (2=3M, 3=6M, 4=12M)
+const HORIZONS = [
+  { key: "3M", col: 2, days: 95 },
+  { key: "6M", col: 3, days: 185 },
+  { key: "12M", col: 4, days: 370 },
+] as const;
 const MIN_N = 3;
 
 export function todayKST(): string {
@@ -33,59 +33,48 @@ const dayNum = (d: string) => {
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400_000 : NaN;
 };
 
-function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const t0 = Date.now();
-  p.then(() => console.log(`[analysis-context] ${label} resolved in ${Date.now() - t0}ms`)).catch(() => {});
-  return Promise.race([
-    p.catch((e) => {
-      console.warn(`[analysis-context] ${label} failed: ${(e as Error).message}`);
-      return null;
-    }),
-    new Promise<null>((r) => {
-      timer = setTimeout(() => {
-        console.warn(`[analysis-context] ${label} timed out after ${ms}ms`);
-        r(null);
-      }, ms);
-    }),
-  ]).finally(() => clearTimeout(timer));
-}
-
-async function trackRecordOf(author: string, asOf: string): Promise<string | null> {
-  const sc = await getScorecard();
+function trackRecordOf(snap: ContextSnapshot, author: string, asOf: string): string {
   const cutoff = dayNum(asOf);
-  const mine = sc.rows.filter((r) => r.author === author);
+  const mine = snap.track.filter((r) => r[0] === author);
   const parts: string[] = [];
-  for (const [h, days] of HORIZON_DAYS) {
+  for (const h of HORIZONS) {
     const ex = mine
-      .filter((r) => dayNum(r.date) + days <= cutoff)
-      .map((r) => r.excess[h])
+      .filter((r) => dayNum(r[1]) + h.days <= cutoff)
+      .map((r) => r[h.col])
       .filter((v): v is number => v != null);
     if (ex.length < MIN_N) continue;
     const avg = ex.reduce((a, b) => a + b, 0) / ex.length;
     const win = ex.filter((v) => v > 0).length / ex.length;
-    parts.push(`${h} 평균 ${pct(avg)} · 중앙값 ${pct(median(ex))} · 승률 ${(win * 100).toFixed(0)}% (n=${ex.length})`);
+    parts.push(`${h.key} 평균 ${pct(avg)} · 중앙값 ${pct(median(ex))} · 승률 ${(win * 100).toFixed(0)}% (n=${ex.length})`);
   }
   return parts.join(" / ");
 }
 
-async function historyOf(code: string | null, name: string, date: string, title: string): Promise<string[]> {
-  const all = await findSameCompany(code, name);
-  return all
-    .filter((r) => r.date < date || (r.date === date && r.title !== title))
+function historyOf(snap: ContextSnapshot, code: string | null, name: string, date: string, title: string): string[] {
+  const seen = new Set<string>();
+  return snap.index
+    .filter(([c, n]) => (code ? c === code : n === name))
+    .filter(([, , d, , t]) => d < date || (d === date && t !== title))
+    .filter(([, , d, , t]) => !seen.has(d + t) && !!seen.add(d + t))
+    .sort((a, b) => b[2].localeCompare(a[2]))
     .slice(0, 5)
-    .map((r) => `${r.date} · ${r.author} · "${r.title}"`);
+    .map(([, , d, a, t]) => `${d} · ${a} · "${t}"`);
 }
 
-// 실패하거나 느리면(캐시가 식은 경우) 해당 항목만 빼고 진행한다.
-// PDF 파싱처럼 CPU를 오래 잡는 작업과 동시에 돌리면 타이머가 먼저 터지므로, 호출 쪽에서 PDF보다 먼저 끝내 둘 것.
+// 스냅샷(Blob)을 못 읽으면 성적·이력은 빼고 진행한다
 export async function getAnalysisContext(
   r: { author: string; code: string | null; name: string; date: string; title: string },
-  timeoutMs = 8000
+  timeoutMs = 5000
 ): Promise<AnalysisContext> {
-  const [trackRecord, history] = await Promise.all([
-    withTimeout("trackRecord", trackRecordOf(r.author, r.date), timeoutMs),
-    withTimeout("history", historyOf(r.code, r.name, r.date, r.title), timeoutMs),
-  ]);
-  return { today: todayKST(), trackRecord, history };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const snap = await Promise.race([
+    getContextSnapshot().catch(() => null),
+    new Promise<null>((res) => (timer = setTimeout(() => res(null), timeoutMs))),
+  ]).finally(() => clearTimeout(timer));
+  if (!snap) console.warn("[analysis-context] snapshot unavailable");
+  return {
+    today: todayKST(),
+    trackRecord: snap ? trackRecordOf(snap, r.author, r.date) : null,
+    history: snap ? historyOf(snap, r.code, r.name, r.date, r.title) : null,
+  };
 }

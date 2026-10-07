@@ -89,7 +89,10 @@ export async function POST(req: NextRequest) {
   const stream = client.messages.stream({
     model,
     max_tokens: 32000,
-    ...(b.thinking === "off" ? { thinking: { type: "disabled" as const } } : {}),
+    // Sonnet 5.x는 "disabled" 대신 "between_tools"로 사고를 끈다 (SDK 타입에 아직 없음)
+    ...(b.thinking === "off"
+      ? { thinking: (model.startsWith("claude-sonnet-5") ? { type: "between_tools" } : { type: "disabled" }) as { type: "disabled" } }
+      : {}),
     // 적응형 사고는 끈다: PDF 원본 + 긴 지시에서 사고만으로 Hobby 함수 한도(300초)를 넘겨 첫 글자도 못 내보냈다.
     messages: [
       {
