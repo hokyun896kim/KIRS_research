@@ -101,6 +101,9 @@ async function pickSamples(authors: string[]): Promise<SampleRef[]> {
   return out;
 }
 
+// 공동작성 리포트는 두 애널 표본에 같이 들어갈 수 있어 애널 번호까지 붙인다
+const customId = (s: SampleRef) => `p${s.no}-${TARGETS.indexOf(s.author)}`;
+
 export const getJobState = async () => (await readJson<JobState>(STATE)) ?? { batches: [] };
 
 export async function submitGroup(group: number, groups: number, dryRun: boolean) {
@@ -121,7 +124,7 @@ export async function submitGroup(group: number, groups: number, dryRun: boolean
   const client = new Anthropic();
   const batch = await client.messages.batches.create({
     requests: reqs.map((r) => ({
-      custom_id: `p${r.s.no}`,
+      custom_id: customId(r.s),
       params: {
         model: ANALYSIS_MODEL,
         max_tokens: 2500,
@@ -151,11 +154,12 @@ export async function syncBatches() {
       report.push({ id: b.id, status: info.processing_status, counts: info.request_counts });
       continue;
     }
-    const byNo = new Map(b.samples.map((s) => [s.no, s]));
+    // 첫 배치는 애널 번호 없이 p{no}로 냈다
+    const byId = new Map(b.samples.flatMap((s) => [[customId(s), s] as const, [`p${s.no}`, s] as const]));
     const recs: ObsRecord[] = [];
     let failed = 0;
     for await (const r of await client.messages.batches.results(b.id)) {
-      const s = byNo.get(r.custom_id.slice(1));
+      const s = byId.get(r.custom_id);
       if (r.result.type !== "succeeded" || !s) {
         failed++;
         continue;
