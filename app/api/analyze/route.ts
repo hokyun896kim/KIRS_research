@@ -8,14 +8,12 @@ import { getGuideline } from "@/lib/guideline-loader";
 import { loadReport, metaFrom, type ReportMeta } from "@/lib/report-input";
 import { parseVerdict, saveVerdict } from "@/lib/verdicts";
 import { getAnalysisContext, todayKST } from "@/lib/analysis-context";
+import { ANALYSIS_MODEL as MODEL, THINKING_OFF } from "@/lib/model";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const MODEL = "claude-sonnet-4-6";
-// 모델 비교 테스트용: 허용 목록 안에서만 요청별로 바꿀 수 있다
-const ALT_MODELS = new Set(["claude-sonnet-4-6", "claude-sonnet-5-5"]);
 // PDF 원본을 그대로 보내면 표·차트까지 읽는다. 요청 한도(32MB) 안쪽만 첨부하고, 넘으면 추출 텍스트로 대체.
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 // maxDuration(300초) 전에 스스로 끊어서 504 대신 "여기까지 분석" 안내를 남긴다.
@@ -26,8 +24,6 @@ type Side = Partial<ReportMeta> & { url?: string; no?: string | null };
 type Body = Side & {
   mode?: Mode;
   lens?: string; // 반론모드 렌즈 애널 이름
-  model?: string; // 비교 테스트용 (ALT_MODELS)
-  thinking?: "off"; // 비교 테스트용: 모델 기본 사고를 끈다
   prev?: Side; // 비교모드: 이전 리포트
 };
 
@@ -41,7 +37,6 @@ export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
 
   const report = metaFrom((k) => b[k as keyof ReportMeta] as string | null | undefined);
-  const model = b.model && ALT_MODELS.has(b.model) ? b.model : MODEL;
 
   let prompt: string;
   let pdfs: { data: string; title: string }[] = [];
@@ -87,13 +82,10 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic();
   const stream = client.messages.stream({
-    model,
+    model: MODEL,
     max_tokens: 32000,
-    // Sonnet 5.x는 "disabled" 대신 "between_tools"로 사고를 끈다 (SDK 타입에 아직 없음)
-    ...(b.thinking === "off"
-      ? { thinking: (model.startsWith("claude-sonnet-5") ? { type: "between_tools" } : { type: "disabled" }) as { type: "disabled" } }
-      : {}),
-    // 적응형 사고는 끈다: PDF 원본 + 긴 지시에서 사고만으로 Hobby 함수 한도(300초)를 넘겨 첫 글자도 못 내보냈다.
+    // 사고는 끈다: PDF 원본 + 긴 지시에서 사고만으로 Hobby 함수 한도(300초)에 닿거나 첫 글자가 2~3분 늦었다.
+    thinking: THINKING_OFF,
     messages: [
       {
         role: "user",
@@ -133,7 +125,7 @@ export async function POST(req: NextRequest) {
           if (v.verdict || v.conviction != null) {
             await saveVerdict(
               { no: String(b.no), mode, ...v, createdAt: new Date().toISOString() },
-              { name: report.name, code: report.code, date: report.date, author: report.author, model }
+              { name: report.name, code: report.code, date: report.date, author: report.author, model: MODEL }
             ).catch(() => {});
           }
         }
@@ -159,7 +151,7 @@ export async function POST(req: NextRequest) {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
-      "X-Analyze-Model": model,
+      "X-Analyze-Model": MODEL,
     },
   });
 }

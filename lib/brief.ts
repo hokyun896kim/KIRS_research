@@ -2,9 +2,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Profile } from "./profiles";
 import type { ReportMeta } from "./report-input";
+import { ANALYSIS_MODEL, THINKING_OFF } from "./model";
 
 // 팝업 상단 "바이사이드 냉정 브리핑" 프롬프트·스키마. 생성·캐시는 brief-service.ts
-export const BRIEF_MODEL = "claude-sonnet-4-6";
+export const BRIEF_MODEL = ANALYSIS_MODEL;
 
 export type Brief = {
   headline: string; // 한 줄 냉정 판단
@@ -117,7 +118,8 @@ export function buildBriefPrompt(c: BriefContext): string {
 export async function generateBrief(prompt: string): Promise<Brief> {
   const client = new Anthropic();
   const msg = await client.messages.create({
-    model: BRIEF_MODEL,
+    model: ANALYSIS_MODEL,
+    thinking: THINKING_OFF,
     max_tokens: 4000,
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: BRIEF_SCHEMA as unknown as Record<string, unknown> } },
