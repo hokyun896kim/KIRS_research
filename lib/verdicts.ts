@@ -6,7 +6,7 @@ import { put, list, del, get } from "@vercel/blob";
 
 export type VerdictLabel = "필독" | "참고" | "패스";
 export type Relative = "강함" | "평소" | "약함";
-export type VerdictMode = "full" | "trade" | "backfill";
+export type VerdictMode = "full" | "trade" | "brief" | "backfill";
 
 export type Verdict = {
   no: string;
@@ -28,7 +28,7 @@ const R_DEC = inv(R_CODE);
 export const blobEnabled = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 // 스토어를 공개로 만들었을 수도 있어 비공개 → 공개 순으로 시도
-async function putJson(pathname: string, data: unknown) {
+export async function putJson(pathname: string, data: unknown) {
   const body = JSON.stringify(data);
   const opts = { contentType: "application/json", addRandomSuffix: false, allowOverwrite: true } as const;
   try {

@@ -35,9 +35,9 @@ function group(label: string, xs: number[]): Group {
   };
 }
 
-// 리포트당 판정 하나: 앱에서 직접 돌린 풀·매매모드(최신) > 일괄 판정(최신)
+// 리포트당 판정 하나: 풀·매매모드(최신) > 팝업 브리핑 > 일괄 판정
 function pickPerReport(vs: Verdict[]): Map<string, Verdict> {
-  const rank = (v: Verdict) => (v.mode === "backfill" ? 0 : 1);
+  const rank = (v: Verdict) => (v.mode === "backfill" ? 0 : v.mode === "brief" ? 1 : 2);
   const out = new Map<string, Verdict>();
   for (const v of vs) {
     const cur = out.get(v.no);

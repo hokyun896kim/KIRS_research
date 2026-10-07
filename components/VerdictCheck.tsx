@@ -72,8 +72,8 @@ export default function VerdictCheck({ h, hLabel }: { h: HorizonKey; hLabel: str
       {stats?.enabled && (
         <>
           <p className="mb-2 text-xs text-slate-500">
-            저장된 판정 {stats.verdictCount}건 (앱 분석 {(stats.byMode.full ?? 0) + (stats.byMode.trade ?? 0)} · 일괄{" "}
-            {stats.byMode.backfill ?? 0}) · 채점과 맞물린 리포트 {stats.matched}건
+            저장된 판정 {stats.verdictCount}건 (앱 분석 {(stats.byMode.full ?? 0) + (stats.byMode.trade ?? 0)} · 브리핑{" "}
+            {stats.byMode.brief ?? 0} · 일괄 {stats.byMode.backfill ?? 0}) · 채점과 맞물린 리포트 {stats.matched}건
             {stats.pendingReports > 0 && ` · 처리 대기 중인 일괄 판정 ${stats.pendingReports}건`}
           </p>
           {g && g.overall.n > 0 ? (
