@@ -48,6 +48,13 @@ export async function GET(req: NextRequest) {
   const keys = [process.env.ADMIN_KEY, process.env.JOB_KEY].filter(Boolean);
   if (!keys.includes(sp.get("key") ?? "")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const what = sp.get("what");
-  const body = what === "observations" ? await getObservations() : what === "calibrated" ? await getCalibrated() : await getProposal();
+  const body =
+    what === "observations"
+      ? await getObservations()
+      : what === "calibrated"
+        ? await getCalibrated()
+        : what === "bundle"
+          ? { calibrated: await getCalibrated(), proposal: await getProposal(), observations: await getObservations() }
+          : await getProposal();
   return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }
