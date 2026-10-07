@@ -3,72 +3,39 @@
 import { useEffect, useState } from "react";
 import type { Group, VerdictStats } from "@/lib/verdict-stats";
 import type { HorizonKey } from "@/lib/scorecard";
+import { Block, BlockTitle, pct, retTone as tone } from "./ui";
 
-const pct = (v?: number | null) =>
-  v == null ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
-const tone = (v?: number | null) =>
-  v == null
-    ? "text-slate-400"
-    : v > 0
-      ? "text-rose-600"
-      : v < 0
-        ? "text-blue-600"
-        : "text-slate-600";
-const VERDICT_ICON: Record<string, string> = {
-  필독: "🔥 필독",
-  참고: "📌 참고",
-  패스: "⏭ 패스",
-};
-
-function GroupTable({ title, groups }: { title: string; groups: Group[] }) {
-  const maxAbs = Math.max(
-    0.01,
-    ...groups.map((g) => Math.abs(g.avgExcess ?? 0)),
-  );
+function GroupList({ title, groups }: { title: string; groups: Group[] }) {
+  const maxAbs = Math.max(0.01, ...groups.map((g) => Math.abs(g.avgExcess ?? 0)));
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card">
-      <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500">
-        {title}
-      </div>
-      <ul className="divide-y divide-slate-100">
+    <div className="rounded-2xl bg-g50 p-4">
+      <div className="mb-1 text-[14px] font-semibold text-g600">{title}</div>
+      <ul>
         {groups.map((g) => {
           const v = g.avgExcess ?? 0;
           const w = `${Math.min(50, (Math.abs(v) / maxAbs) * 50)}%`;
           const isAll = g.label.endsWith("전체");
           return (
-            <li
-              key={g.label}
-              className={`px-4 py-2.5 ${isAll ? "bg-slate-50/70" : ""}`}
-            >
+            <li key={g.label} className={`py-2.5 ${isAll ? "mt-1 border-t border-g200" : ""}`}>
               <div className="flex items-baseline justify-between gap-2">
-                <span
-                  className={`text-sm ${isAll ? "font-semibold text-slate-500" : "font-medium text-slate-800"}`}
-                >
-                  {VERDICT_ICON[g.label] ?? g.label}
-                  <span className="num ml-1.5 text-xs font-normal text-slate-400">
-                    {g.n}건
-                  </span>
+                <span className={`text-[15px] ${isAll ? "font-medium text-g600" : "font-semibold text-g900"}`}>
+                  {g.label}
+                  <span className="num ml-1.5 text-[13px] font-normal text-g500">{g.n}건</span>
                 </span>
-                <span className={`num text-sm font-bold ${tone(g.avgExcess)}`}>
-                  {pct(g.avgExcess)}
-                </span>
+                <span className={`num text-[16px] font-bold ${tone(g.avgExcess)}`}>{pct(g.avgExcess)}</span>
               </div>
-              <div className="relative mt-1.5 h-1.5 rounded-full bg-slate-100">
-                <span className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
+              <div className="relative mt-2 h-1.5 rounded-full bg-g200">
+                <span className="absolute inset-y-[-2px] left-1/2 w-px bg-g300" />
                 {g.avgExcess != null && (
                   <span
-                    className={`absolute inset-y-0 rounded-full ${v >= 0 ? "left-1/2 bg-rose-400" : "right-1/2 bg-blue-400"}`}
+                    className={`absolute inset-y-0 rounded-full ${v >= 0 ? "left-1/2 bg-tr" : "right-1/2 bg-tb"}`}
                     style={{ width: w }}
                   />
                 )}
               </div>
-              <div className="num mt-1 flex justify-between text-[11px] text-slate-400">
-                <span>중앙 {pct(g.medianExcess)}</span>
-                <span>
-                  {g.winRate == null
-                    ? "—"
-                    : `승률 ${(g.winRate * 100).toFixed(0)}%`}
-                </span>
+              <div className="num mt-1.5 flex justify-between text-[12px] text-g500">
+                <span>중앙값 {pct(g.medianExcess)}</span>
+                <span>{g.winRate == null ? "—" : `승률 ${(g.winRate * 100).toFixed(0)}%`}</span>
               </div>
             </li>
           );
@@ -78,13 +45,7 @@ function GroupTable({ title, groups }: { title: string; groups: Group[] }) {
   );
 }
 
-export default function VerdictCheck({
-  h,
-  hLabel,
-}: {
-  h: HorizonKey;
-  hLabel: string;
-}) {
+export default function VerdictCheck({ h, hLabel }: { h: HorizonKey; hLabel: string }) {
   const [stats, setStats] = useState<VerdictStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -104,54 +65,34 @@ export default function VerdictCheck({
   const g = stats?.horizons[h];
 
   return (
-    <section className="mt-10">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-slate-900">
-            🤖 AI 판정 검증
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-500">
-            AI가 🔥필독이라고 한 리포트, 정말 시장보다 더 올랐을까?
-          </p>
-        </div>
-        <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 shadow-sm">
-          <input
-            type="checkbox"
-            className="accent-indigo-600"
-            checked={all}
-            onChange={(e) => setAll(e.target.checked)}
-          />
-          {stats?.fairSince ?? "2026-07-01"} 이전 리포트 포함{" "}
-          <span className="text-slate-400">(오염 가능)</span>
-        </label>
-      </div>
+    <Block>
+      <BlockTitle sub="AI가 필독이라고 한 리포트, 정말 시장보다 더 올랐을까요?">AI 판정 검증</BlockTitle>
 
-      {err && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          판정 통계를 불러오지 못했어요: {err}
-        </div>
-      )}
+      <button
+        onClick={() => setAll((v) => !v)}
+        className={`press mb-4 h-9 rounded-full px-3.5 text-[14px] font-semibold ${all ? "bg-g800 text-white" : "bg-g100 text-g700"}`}
+      >
+        {stats?.fairSince ?? "2026-07-01"} 이전 리포트도 포함 {all ? "(오염 가능)" : ""}
+      </button>
+
+      {err && <p className="text-[15px] text-g600">판정 통계를 불러오지 못했어요. {err}</p>}
       {!stats && !err && (
         <div className="grid gap-3 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-44 animate-pulse rounded-2xl bg-slate-200/60"
-            />
+            <div key={i} className="h-44 animate-pulse rounded-2xl bg-g100" />
           ))}
         </div>
       )}
 
       {stats && !stats.enabled && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          판정 저장소(Vercel Blob)가 아직 연결되지 않았어요. 연결되면 AI
-          자동분석 결과가 자동으로 쌓입니다.
-        </div>
+        <p className="rounded-2xl bg-g50 p-4 text-[15px] text-g600">
+          판정 저장소(Vercel Blob)가 아직 연결되지 않았어요. 연결되면 AI 분석 결과가 자동으로 쌓여요.
+        </p>
       )}
 
       {stats?.enabled && (
         <>
-          <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+          <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-g500">
             {[
               ["저장된 판정", stats.verdictCount],
               ["앱 분석", (stats.byMode.full ?? 0) + (stats.byMode.trade ?? 0)],
@@ -159,45 +100,32 @@ export default function VerdictCheck({
               ["일괄", stats.byMode.backfill ?? 0],
               ["채점 매칭", stats.matched],
             ].map(([k, v]) => (
-              <span
-                key={k as string}
-                className="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200"
-              >
-                {k} <b className="num font-semibold text-slate-800">{v}</b>
+              <span key={k as string}>
+                {k} <b className="num font-semibold text-g800">{v}</b>
               </span>
             ))}
             {stats.pendingReports > 0 && (
-              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200">
+              <span className="text-orange-700">
                 일괄 판정 대기 <b className="num">{stats.pendingReports}</b>
               </span>
             )}
           </div>
           {g && g.overall.n > 0 ? (
             <div className="grid gap-3 md:grid-cols-3">
-              <GroupTable
-                title={`판정별 · ${hLabel} 시장 대비`}
-                groups={[...g.byVerdict, g.overall]}
-              />
-              <GroupTable
-                title={`확신도별 · ${hLabel}`}
-                groups={g.byConviction}
-              />
-              <GroupTable
-                title={`AI 역산 업사이드별 · ${hLabel}`}
-                groups={g.byUpside}
-              />
+              <GroupList title={`판정별 · ${hLabel} 뒤 시장 대비`} groups={[...g.byVerdict, g.overall]} />
+              <GroupList title={`확신도별 · ${hLabel}`} groups={g.byConviction} />
+              <GroupList title={`AI 역산 업사이드별 · ${hLabel}`} groups={g.byUpside} />
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5 text-sm leading-relaxed text-slate-500">
-              아직 {hLabel} 수익률까지 채점된 판정이 없어요. 상세 화면에서 AI
-              자동분석(풀·매매모드)을 돌리면 판정이 자동 저장되고, 아래 관리자
-              패널로 과거 리포트를 한꺼번에 판정할 수도 있어요.
-            </div>
+            <p className="rounded-2xl bg-g50 p-5 text-[15px] leading-relaxed text-g600">
+              아직 {hLabel} 수익률까지 채점된 판정이 없어요. 상세 화면에서 AI 분석(풀·매매모드)을 돌리면 판정이 자동으로 저장되고, 아래 관리자
+              메뉴로 과거 리포트를 한꺼번에 판정할 수도 있어요.
+            </p>
           )}
           <AdminPanel fairSince={stats.fairSince} />
         </>
       )}
-    </section>
+    </Block>
   );
 }
 
@@ -293,15 +221,15 @@ function AdminPanel({ fairSince }: { fairSince: string }) {
   }
 
   return (
-    <details className="group mt-4 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-sm shadow-card">
-      <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-slate-600">
+    <details className="group mt-4 rounded-2xl bg-g50 px-4 py-3.5 text-[14px]">
+      <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-g600">
         <span>⚙ 관리자 · 과거 리포트 일괄 판정</span>
-        <span className="text-xs text-slate-400 transition group-open:rotate-180">
+        <span className="text-[13px] text-g400 transition group-open:rotate-180">
           ▾
         </span>
       </summary>
-      <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
-        <p className="text-xs text-slate-500">
+      <div className="mt-3 space-y-3 border-t border-g200 pt-3">
+        <p className="text-[13px] text-g500">
           앱의 모듈 7·8 기준으로 판정만 짧게 받아요 (Batch API, 50% 할인).
           비용은 회원님 Anthropic 키로 청구됩니다. 결과는 보통 1시간 안에 나오고
           매일 아침 자동으로 수거돼요.
@@ -312,22 +240,22 @@ function AdminPanel({ fairSince }: { fairSince: string }) {
             value={key}
             onChange={(e) => rememberKey(e.target.value)}
             placeholder="관리자 키 (ADMIN_KEY)"
-            className="w-48 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white"
+            className="w-48 rounded-lg bg-white px-3 py-2 outline-none ring-1 ring-g200 focus:ring-tb"
           />
-          <label className="flex items-center gap-1 text-xs text-slate-500">
+          <label className="flex items-center gap-1 text-[13px] text-g500">
             발간일
             <input
               type="date"
               value={since}
               onChange={(e) => setSince(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white"
+              className="rounded-lg bg-white px-3 py-2 outline-none ring-1 ring-g200 focus:ring-tb"
             />
             이후
           </label>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white"
+            className="rounded-lg bg-white px-3 py-2 outline-none ring-1 ring-g200 focus:ring-tb"
           >
             {[20, 40, 80].map((n) => (
               <option key={n} value={n}>
@@ -340,7 +268,7 @@ function AdminPanel({ fairSince }: { fairSince: string }) {
           <button
             disabled={!key || !!busy}
             onClick={() => backfill(true)}
-            className="rounded-full border border-slate-200 bg-white px-4 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            className="press h-10 rounded-xl bg-white px-4 font-semibold text-g700 ring-1 ring-g200 disabled:opacity-40"
           >
             {busy === "preview" ? "계산 중… (PDF 읽는 중)" : "비용 미리보기"}
           </button>
@@ -354,27 +282,27 @@ function AdminPanel({ fairSince }: { fairSince: string }) {
               )
                 backfill(false);
             }}
-            className="rounded-full bg-indigo-600 px-4 py-1.5 font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-40"
+            className="press h-10 rounded-xl bg-tb px-4 font-semibold text-white hover:bg-tb-600 disabled:opacity-40"
           >
             {busy === "submit" ? "제출 중…" : "배치 제출"}
           </button>
           <button
             disabled={!!busy}
             onClick={sync}
-            className="rounded-full border border-slate-200 bg-white px-4 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            className="press h-10 rounded-xl bg-white px-4 font-semibold text-g700 ring-1 ring-g200 disabled:opacity-40"
           >
             {busy === "sync" ? "확인 중…" : "결과 가져오기"}
           </button>
         </div>
         {preview && (
-          <div className="rounded-xl bg-indigo-50/60 p-3 text-xs text-slate-600 ring-1 ring-indigo-100">
+          <div className="rounded-xl bg-tb-50 p-3 text-[13px] text-g700">
             후보 {preview.candidates}건 중 이번에 {preview.wouldSubmit}건 · 예상
             비용 약 <b>${preview.estCostUSD?.toFixed(2)}</b> · 남은 후보{" "}
             {(preview.candidates ?? 0) - (preview.wouldSubmit ?? 0)}건
           </div>
         )}
         {msg && (
-          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
+          <div className="rounded-xl bg-white p-3 text-[13px] text-g700">
             {msg}
           </div>
         )}

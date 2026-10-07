@@ -3,20 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Report, ExtractResponse } from "@/lib/types";
-import AnalystCard from "./AnalystCard";
-import { SectionTitle, SectorPill } from "./ui";
-import BriefCard from "./BriefCard";
-import { PROFILES } from "@/lib/profiles";
+import type { Report, ExtractResponse, BriefsResponse, AnalystSummary } from "@/lib/types";
+import AnalystCard, { MIN_TRACK_N } from "./AnalystCard";
+import { Avatar, CompanyMark, Spinner, pct, retTone } from "./ui";
+import { BriefBody, BriefHero, useBrief } from "./BriefCard";
+import { PROFILES, matchProfile } from "@/lib/profiles";
+import { classifySector } from "@/lib/sector";
 
 type Mode = "full" | "trade" | "counter" | "compare";
 
-const MODE_META: Record<Mode, { title: string; sub: string; icon: string }> = {
-  full: { title: "풀모드", sub: "모듈 1~5 · 확신도 · 상승여력", icon: "🧭" },
-  trade: { title: "매매모드", sub: "+ 모듈 6 · 웹검색 현재가", icon: "💹" },
-  counter: { title: "반론모드", sub: "반대 렌즈로 재검증", icon: "🥊" },
-  compare: { title: "비교모드", sub: "이전 리포트 대비 변화", icon: "🔁" },
+const MODE_META: Record<Mode, { title: string; sub: string }> = {
+  full: { title: "풀모드", sub: "애널 렌즈 분석 · 확신도 · 상승여력 역산" },
+  trade: { title: "매매모드", sub: "풀모드 + 현재가·밸류 웹검색" },
+  counter: { title: "반론모드", sub: "정반대 성향 애널 눈으로 재검증" },
+  compare: { title: "비교모드", sub: "이전 리포트와 무엇이 달라졌나" },
 };
+
+type View = "brief" | "lens" | "history" | "ai";
 
 // 같은 종목의 이전 리포트: 발간일이 빠르거나, 같은 날이면 번호가 작은 것
 function olderThan(list: Report[], cur: Report): Report[] {
@@ -52,7 +55,12 @@ export default function ReportDetail({
   const [prevNo, setPrevNo] = useState<string | null>(null);
   const [comparePrompt, setComparePrompt] = useState<string | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
-  const [tab, setTab] = useState<"prompt" | "ai">("ai");
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [view, setView] = useState<View>("brief");
+  const [track, setTrack] = useState<Record<string, AnalystSummary>>({});
+  const brief = useBrief(report);
+  const sector = classifySector(report.name, report.title);
+  const authorProfile = matchProfile(report.author);
   const [copied, setCopied] = useState(false);
 
   // AI 자동분석 상태
@@ -94,6 +102,19 @@ export default function ReportDetail({
     return () => {
       alive = false;
       abortRef.current?.abort();
+    };
+  }, [report]);
+
+  // 애널별 6개월 성과 (목록과 같은 API, CDN 캐시)
+  useEffect(() => {
+    if (!report.no) return;
+    let alive = true;
+    fetch(`/api/briefs?nos=${report.no}`)
+      .then((r) => (r.ok ? (r.json() as Promise<BriefsResponse>) : null))
+      .then((j) => alive && j && setTrack(j.analysts))
+      .catch(() => {});
+    return () => {
+      alive = false;
     };
   }, [report]);
 
@@ -289,423 +310,346 @@ export default function ReportDetail({
     }
   }
 
+  const authorTrack = track[report.author]?.n6 >= MIN_TRACK_N ? track[report.author] : undefined;
+  const VIEWS: { key: View; label: string }[] = [
+    { key: "brief", label: "브리핑" },
+    { key: "lens", label: "애널 렌즈" },
+    { key: "history", label: history ? `이력 ${history.length}` : "이력" },
+    { key: "ai", label: "AI 분석" },
+  ];
+
+  const extractState = loading ? (
+    <div className="flex items-center gap-2.5 py-10 text-[15px] text-g500">
+      <Spinner /> PDF 본문을 읽고 애널리스트를 찾는 중이에요
+    </div>
+  ) : err ? (
+    <div className="rounded-2xl bg-g50 p-4 text-[15px] text-g700">
+      {err}
+      {report.pdfUrl && (
+        <a href={report.pdfUrl} target="_blank" rel="noopener" className="ml-2 font-semibold text-tb">
+          원본 PDF 열기
+        </a>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        className="absolute inset-0 animate-fade-in bg-slate-900/40 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <aside className="relative flex h-full w-full max-w-3xl animate-drawer-in flex-col bg-[#f6f7f9] shadow-pop">
-        {/* 헤더 */}
-        <header className="flex-none border-b border-slate-200/80 bg-white px-5 pb-4 pt-4 sm:px-7 sm:pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-                {data?.sector && <SectorPill sector={data.sector} />}
-                {report.code && <span className="num">{report.code}</span>}
-                <span>·</span>
-                <span>
-                  {report.author} · <span className="num">{report.date}</span>
-                </span>
-              </div>
-              <h2 className="mt-1.5 truncate text-[24px] font-extrabold tracking-tight text-slate-900">
-                {report.name}
-              </h2>
-              <p className="mt-0.5 line-clamp-2 text-[14px] leading-snug text-slate-600">
-                {report.title}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="닫기"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
+      <div className="absolute inset-0 hidden animate-fade-in bg-black/40 sm:block" onClick={onClose} />
+      <aside className="relative flex h-full w-full animate-sheet-in flex-col overflow-y-auto overscroll-contain bg-g100 sm:max-w-[680px] sm:animate-drawer-in">
+        {/* 상단 바 */}
+        <div className="sticky top-0 z-20 flex h-14 flex-none items-center justify-between bg-white px-2 sm:px-4">
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="grid h-10 w-10 place-items-center rounded-full text-g800 hover:bg-g100"
+          >
+            <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden>
+              <path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {report.pdfUrl && (
+            <a
+              href={report.pdfUrl}
+              target="_blank"
+              rel="noopener"
+              className="rounded-lg px-3 py-2 text-[14px] font-semibold text-g600 hover:bg-g100"
             >
-              ✕
-            </button>
+              원본 PDF
+            </a>
+          )}
+        </div>
+
+        {/* 종목 · 요약 */}
+        <section className="bg-white px-5 pb-6 pt-1 sm:px-7">
+          <div className="flex items-center gap-3.5">
+            <CompanyMark name={report.name} sector={sector} size="lg" />
+            <div className="min-w-0">
+              <h2 className="truncate text-[24px] font-bold tracking-tight text-g900">{report.name}</h2>
+              <div className="num mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[14px] text-g500">
+                {report.code && <span>{report.code}</span>}
+                {sector.key !== "etc" && <span>· {sector.label}</span>}
+                <span>· {report.date.replaceAll("-", ".")}</span>
+              </div>
+            </div>
           </div>
-        </header>
-
-        <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-7 sm:py-6">
-          <BriefCard report={report} />
-
-          {loading && (
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white px-5 py-6 text-sm text-slate-500 shadow-card">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-500" />
-              PDF 본문 추출 + 애널리스트 매칭 중…
+          <p className="mt-4 text-[17px] font-semibold leading-snug text-g800">{report.title}</p>
+          <div className="mt-3 flex items-center gap-2 text-[14px] text-g600">
+            <Avatar name={report.author} stance={authorProfile?.stance} size="xs" />
+            <span className="font-semibold text-g800">{report.author}</span>
+            {authorProfile && <span className="truncate text-g500">{authorProfile.type}</span>}
+            {authorTrack && (
+              <span className="num ml-auto shrink-0 text-[13px] text-g500">
+                6개월 <span className={`font-semibold ${retTone(authorTrack.avg6)}`}>{pct(authorTrack.avg6)}</span> · 승률{" "}
+                {(authorTrack.win6 * 100).toFixed(0)}%
+              </span>
+            )}
+          </div>
+          {brief.enabled && (
+            <div className="mt-5">
+              <BriefHero res={brief.res} err={brief.err} />
             </div>
           )}
+        </section>
 
-          {err && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {err}
-              {report.pdfUrl && (
-                <a
-                  href={report.pdfUrl}
-                  target="_blank"
-                  rel="noopener"
-                  className="ml-2 font-semibold underline"
+        {/* 탭 */}
+        <div className="sticky top-14 z-10 mt-2.5 flex-none border-b border-g100 bg-white px-2 sm:px-4">
+          <div className="flex">
+            {VIEWS.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setView(v.key)}
+                className={`relative h-12 flex-1 text-[15px] font-semibold transition ${
+                  view === v.key ? "text-g900" : "text-g500 hover:text-g700"
+                }`}
+              >
+                {v.label}
+                {view === v.key && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-g900" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <section className="min-h-[60vh] flex-1 bg-white px-5 py-6 sm:px-7">
+          {/* 브리핑 */}
+          {view === "brief" &&
+            (brief.res ? (
+              <BriefBody res={brief.res} />
+            ) : brief.err || !brief.enabled ? (
+              <p className="py-10 text-center text-[15px] text-g500">브리핑이 없어요. AI 분석 탭에서 직접 분석할 수 있어요.</p>
+            ) : (
+              <div className="space-y-3 py-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-4 animate-pulse rounded bg-g100" style={{ width: `${92 - i * 14}%` }} />
+                ))}
+              </div>
+            ))}
+
+          {/* 애널 렌즈 */}
+          {view === "lens" &&
+            (extractState ??
+              (data && (
+                <div className="space-y-3">
+                  {data.profile ? (
+                    <AnalystCard p={data.profile} role="주렌즈 · 작성 애널" track={track[data.profile.name]} />
+                  ) : (
+                    <div className="rounded-2xl bg-g50 p-4 text-[15px] text-g700">
+                      도감에 없는 애널({data.analyst ?? "미상"})이에요. 분석 때는 문체로 가장 가까운 유형을 추정해 임시 프로필을 만들어요.
+                    </div>
+                  )}
+                  {data.raProfile && <AnalystCard p={data.raProfile} role="보조렌즈 · RA" track={track[data.raProfile.name]} collapsible />}
+                  <p className="num pt-1 text-[13px] text-g400">
+                    PDF {data.pages ?? "?"}쪽 · 본문 {data.textLength.toLocaleString()}자
+                  </p>
+                </div>
+              )))}
+
+          {/* 이력 */}
+          {view === "history" && (
+            <div>
+              {!history && !historyErr && (
+                <div className="flex items-center gap-2.5 py-10 text-[15px] text-g500">
+                  <Spinner /> 같은 종목의 KIRS 리포트를 찾는 중이에요
+                </div>
+              )}
+              {historyErr && <p className="py-10 text-[15px] text-g600">이력을 불러오지 못했어요. {historyErr}</p>}
+              {history && (
+                <ol>
+                  {(showAllHistory ? history : history.slice(0, 8)).map((r) => {
+                    const isCur = r.no === report.no;
+                    const body = (
+                      <>
+                        <div className="num text-[13px] text-g500">
+                          {r.date.replaceAll("-", ".")} · {r.author}
+                        </div>
+                        <div className={`mt-1 text-[16px] leading-snug ${isCur ? "font-bold text-g900" : "font-medium text-g800"}`}>
+                          {r.title}
+                        </div>
+                        {isCur && <span className="mt-1.5 inline-block rounded-md bg-tb-50 px-1.5 py-0.5 text-[12px] font-bold text-tb">지금 보는 리포트</span>}
+                      </>
+                    );
+                    return (
+                      <li key={`${r.no}-${r.date}`} className="border-b border-g100 last:border-0">
+                        {isCur || !onOpenReport ? (
+                          <div className="px-1 py-4">{body}</div>
+                        ) : (
+                          <button onClick={() => onOpenReport(r)} className="press block w-full rounded-xl px-1 py-4 text-left hover:bg-g50">
+                            {body}
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {history && history.length > 8 && (
+                <button
+                  onClick={() => setShowAllHistory((v) => !v)}
+                  className="press mt-3 h-11 w-full rounded-xl bg-g100 text-[14px] font-semibold text-g700"
                 >
-                  원본 PDF 열기
-                </a>
+                  {showAllHistory ? "접기" : `${history.length}건 모두 보기`}
+                </button>
               )}
             </div>
           )}
 
-          {data && (
-            <>
-              {/* 작성 애널 렌즈 */}
-              <section>
-                <SectionTitle
-                  icon="🔎"
-                  right={
-                    <span className="num flex flex-wrap justify-end gap-x-2 text-xs text-slate-400">
-                      <span>📄 {data.pages ?? "?"}p</span>
-                      <span>본문 {data.textLength.toLocaleString()}자</span>
-                      {report.pdfUrl && (
-                        <a
-                          href={report.pdfUrl}
-                          target="_blank"
-                          rel="noopener"
-                          className="font-medium text-indigo-600 hover:underline"
+          {/* AI 분석 */}
+          {view === "ai" &&
+            (extractState ??
+              (data && (
+                <div>
+                  <h3 className="text-[20px] font-bold tracking-tight text-g900">AI에게 깊게 맡기기</h3>
+                  <p className="mt-1 text-[15px] leading-relaxed text-g600">
+                    PDF 원본을 표·차트까지 직접 읽고 분석해요. 보통 1~2분 걸리고, 호출마다 소액의 비용이 들어요.
+                  </p>
+
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    {(["full", "trade", "counter", "compare"] as const).map((m) => {
+                      const meta = MODE_META[m];
+                      const disabled = m === "compare" && olderReports.length === 0;
+                      const on = mode === m;
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => setMode(m)}
+                          disabled={disabled}
+                          title={disabled ? "이 종목의 이전 리포트가 없어요" : undefined}
+                          className={`press flex items-center gap-3 rounded-2xl p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            on ? "bg-tb-50 ring-2 ring-tb" : "bg-g50 hover:bg-g100"
+                          }`}
                         >
-                          원본 PDF ↗
-                        </a>
-                      )}
-                    </span>
-                  }
-                >
-                  작성 애널 렌즈
-                </SectionTitle>
-                <div className="space-y-3">
-                  {data.profile ? (
-                    <AnalystCard p={data.profile} role="주렌즈" collapsible />
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
-                      DB 미등록 애널({data.analyst ?? "미상"}) — 지침 STEP 0.2에
-                      따라 임시 프로파일을 추정합니다.
-                    </div>
-                  )}
-                  {data.raProfile && (
-                    <AnalystCard
-                      p={data.raProfile}
-                      role="보조렌즈(RA)"
-                      collapsible
-                    />
-                  )}
-                </div>
-              </section>
-
-              {/* 종목 리포트 이력 */}
-              <section>
-                <SectionTitle
-                  icon="📚"
-                  right={
-                    history &&
-                    history.length > 4 && (
-                      <button
-                        onClick={() => setShowAllHistory((v) => !v)}
-                        className="text-xs font-medium text-slate-400 hover:text-slate-700"
-                      >
-                        {showAllHistory ? "접기" : `전체 ${history.length}건`}
-                      </button>
-                    )
-                  }
-                >
-                  이 종목 KIRS 리포트 이력
-                  {history ? ` ${history.length}건` : ""}
-                </SectionTitle>
-                <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card">
-                  {!history && !historyErr && (
-                    <div className="text-xs text-slate-400">
-                      전체 목록에서 같은 종목을 찾는 중… (처음엔 20초쯤 걸려요)
-                    </div>
-                  )}
-                  {historyErr && (
-                    <div className="text-xs text-red-500">
-                      이력을 불러오지 못했어요: {historyErr}
-                    </div>
-                  )}
-                  {history && (
-                    <ol className="relative space-y-3 border-l-2 border-slate-100 pl-4">
-                      {(showAllHistory ? history : history.slice(0, 4)).map(
-                        (r) => {
-                          const isCur = r.no === report.no;
-                          return (
-                            <li key={`${r.no}-${r.date}`} className="relative">
-                              <span
-                                className={`absolute -left-[22px] top-1 h-2.5 w-2.5 rounded-full ring-4 ring-white ${
-                                  isCur ? "bg-indigo-500" : "bg-slate-300"
-                                }`}
-                              />
-                              <div className="num text-[11px] text-slate-400">
-                                {r.date} · {r.author}
-                              </div>
-                              {isCur || !onOpenReport ? (
-                                <div
-                                  className={`text-[13.5px] leading-snug ${isCur ? "font-semibold text-slate-900" : "text-slate-600"}`}
-                                >
-                                  {r.title}
-                                  {isCur && (
-                                    <span className="ml-1.5 rounded bg-indigo-50 px-1.5 py-px text-[11px] font-semibold text-indigo-600">
-                                      지금 보는 리포트
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => onOpenReport(r)}
-                                  className="text-left text-[13.5px] leading-snug text-slate-600 hover:text-indigo-700 hover:underline"
-                                >
-                                  {r.title}
-                                </button>
-                              )}
-                            </li>
-                          );
-                        },
-                      )}
-                    </ol>
-                  )}
-                </div>
-              </section>
-
-              {/* 분석 도구 */}
-              <section>
-                <SectionTitle icon="🛠">분석 도구</SectionTitle>
-                <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card sm:p-5">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {(["full", "trade", "counter", "compare"] as const).map(
-                      (m) => {
-                        const meta = MODE_META[m];
-                        const disabled =
-                          m === "compare" && olderReports.length === 0;
-                        const on = mode === m;
-                        return (
-                          <button
-                            key={m}
-                            onClick={() => setMode(m)}
-                            disabled={disabled}
-                            title={
-                              disabled
-                                ? "이 종목의 이전 리포트가 없어요"
-                                : undefined
-                            }
-                            className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                              on
-                                ? "border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-100"
-                                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                            }`}
+                          <span
+                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${on ? "border-tb" : "border-g300"}`}
                           >
-                            <div
-                              className={`text-[14px] font-bold ${on ? "text-indigo-700" : "text-slate-800"}`}
-                            >
-                              <span className="mr-1">{meta.icon}</span>
-                              {meta.title}
-                            </div>
-                            <div className="mt-0.5 text-[11.5px] leading-snug text-slate-500">
-                              {meta.sub}
-                            </div>
-                          </button>
-                        );
-                      },
-                    )}
+                            {on && <span className="h-2.5 w-2.5 rounded-full bg-tb" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className={`block text-[16px] font-semibold ${on ? "text-tb-600" : "text-g900"}`}>{meta.title}</span>
+                            <span className="mt-0.5 block text-[13px] leading-snug text-g500">{meta.sub}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {mode === "counter" && (
-                    <div className="mt-3 space-y-2.5 rounded-xl bg-rose-50/70 p-3.5">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-semibold text-rose-800">
-                          반론 렌즈
-                        </span>
+                    <div className="mt-4 space-y-3">
+                      <label className="flex items-center gap-3 rounded-2xl bg-g50 px-4 py-3">
+                        <span className="shrink-0 text-[14px] font-semibold text-g700">반론 렌즈</span>
                         <select
                           value={data.counterLens.name}
                           disabled={lensLoading}
                           onChange={(e) => changeLens(e.target.value)}
-                          className="h-9 rounded-lg border border-rose-200 bg-white px-2 text-sm font-medium"
+                          className="h-10 min-w-0 flex-1 cursor-pointer rounded-xl bg-white px-3 text-[15px] font-medium text-g900 outline-none"
                         >
-                          {PROFILES.filter(
-                            (p) => p.name !== data.profile?.name,
-                          ).map((p) => (
+                          {PROFILES.filter((p) => p.name !== data.profile?.name).map((p) => (
                             <option key={p.name} value={p.name}>
                               {p.name} · {p.type}
                             </option>
                           ))}
                         </select>
-                        {lensLoading && (
-                          <span className="text-xs text-rose-500">
-                            프롬프트 다시 만드는 중…
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs leading-relaxed text-rose-700/80">
-                        작성 애널과 논리가 정반대인 애널이 기본으로 골라져요.
-                        같은 리포트를 그 애널이 읽었다면 무엇을 의심할지 봅니다.
-                      </p>
-                      <AnalystCard
-                        p={data.counterLens}
-                        role="반론 렌즈"
-                        collapsible
-                      />
+                        {lensLoading && <Spinner />}
+                      </label>
+                      <AnalystCard p={data.counterLens} role="이 사람 눈으로 다시 읽어요" collapsible track={track[data.counterLens.name]} />
                     </div>
                   )}
 
                   {mode === "compare" && (
-                    <div className="mt-3 space-y-2 rounded-xl bg-teal-50/70 p-3.5">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-semibold text-teal-800">
-                          비교할 이전 리포트
-                        </span>
-                        <select
-                          value={prevNo ?? ""}
-                          onChange={(e) => setPrevNo(e.target.value)}
-                          className="h-9 max-w-full rounded-lg border border-teal-200 bg-white px-2 text-sm font-medium"
-                        >
-                          {olderReports.map((r) => (
-                            <option
-                              key={`${r.no}-${r.date}`}
-                              value={r.no ?? ""}
-                            >
-                              {r.date} · {r.author} · {r.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <p className="text-xs leading-relaxed text-teal-700/80">
-                        추정치 변화, 이전 리포트 예측이 맞았는지 채점, 새로
-                        생기거나 사라진 논리, 톤 변화와 말 바뀜을 봅니다.
-                      </p>
-                    </div>
+                    <label className="mt-4 flex flex-col gap-2 rounded-2xl bg-g50 px-4 py-3">
+                      <span className="text-[14px] font-semibold text-g700">비교할 이전 리포트</span>
+                      <select
+                        value={prevNo ?? ""}
+                        onChange={(e) => setPrevNo(e.target.value)}
+                        className="h-11 w-full cursor-pointer rounded-xl bg-white px-3 text-[15px] font-medium text-g900 outline-none"
+                      >
+                        {olderReports.map((r) => (
+                          <option key={`${r.no}-${r.date}`} value={r.no ?? ""}>
+                            {r.date} · {r.author} · {r.title}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[13px] leading-relaxed text-g500">
+                        추정치 변화, 이전 예측 채점, 새로 생기거나 사라진 논리, 톤 변화를 봐요.
+                      </span>
+                    </label>
                   )}
 
-                  {/* 탭 */}
-                  <div className="mt-4 inline-flex rounded-xl bg-slate-100 p-1 text-sm">
-                    {(["ai", "prompt"] as const).map((t) => (
+                  <div className="mt-5 flex gap-2">
+                    <button
+                      onClick={runAi}
+                      disabled={aiLoading}
+                      className="press h-14 flex-1 rounded-2xl bg-tb text-[17px] font-semibold text-white hover:bg-tb-600 disabled:opacity-60"
+                    >
+                      {aiLoading ? "분석하고 있어요…" : aiText ? "다시 분석하기" : `${MODE_META[mode].title}로 분석하기`}
+                    </button>
+                    {aiLoading && (
                       <button
-                        key={t}
-                        onClick={() => setTab(t)}
-                        className={`rounded-lg px-4 py-1.5 font-semibold transition ${
-                          tab === t
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
+                        onClick={() => abortRef.current?.abort()}
+                        className="press h-14 shrink-0 rounded-2xl bg-g100 px-5 text-[16px] font-semibold text-g700"
                       >
-                        {t === "prompt" ? "📋 프롬프트 복붙" : "✨ AI 자동분석"}
+                        중지
                       </button>
-                    ))}
+                    )}
                   </div>
+                  <button
+                    onClick={() => setShowPrompt((v) => !v)}
+                    className="mt-2 h-11 w-full rounded-xl text-[14px] font-semibold text-g600 hover:bg-g50"
+                  >
+                    {showPrompt ? "프롬프트 닫기" : "프롬프트만 복사해서 ChatGPT·Claude에서 쓰기"}
+                  </button>
 
-                  {tab === "prompt" && (
-                    <div className="mt-3 space-y-3">
+                  {showPrompt && (
+                    <div className="mt-2 space-y-3 rounded-2xl bg-g50 p-4">
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={copy}
-                          className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
-                        >
-                          {copied ? "✓ 복사됨" : "프롬프트 복사"}
+                        <button onClick={copy} className="press h-11 rounded-xl bg-g800 px-4 text-[14px] font-semibold text-white">
+                          {copied ? "복사했어요" : "프롬프트 복사"}
                         </button>
                         <button
                           onClick={() => copyAndOpen("chatgpt")}
-                          className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                          className="press h-11 rounded-xl bg-white px-4 text-[14px] font-semibold text-g700 ring-1 ring-g200"
                         >
-                          복사 후 ChatGPT ↗
+                          복사하고 ChatGPT 열기
                         </button>
                         <button
                           onClick={() => copyAndOpen("claude")}
-                          className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                          className="press h-11 rounded-xl bg-white px-4 text-[14px] font-semibold text-g700 ring-1 ring-g200"
                         >
-                          복사 후 Claude ↗
+                          복사하고 Claude 열기
                         </button>
                       </div>
-                      <div>
-                        <div className="num mb-1.5 text-xs font-medium text-slate-500">
-                          {mode === "compare" && compareLoading
-                            ? "두 리포트 PDF를 읽어 비교 프롬프트를 만드는 중…"
-                            : `완성 프롬프트 (${mode === "compare" ? "두 리포트 본문" : "지침 + 프로파일 + PDF본문"}, ${prompt.length.toLocaleString()}자)`}
-                        </div>
-                        <textarea
-                          readOnly
-                          value={prompt}
-                          className="h-64 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3.5 font-mono text-[11.5px] leading-relaxed text-slate-700 outline-none focus:border-indigo-300"
-                        />
+                      <div className="num text-[13px] text-g500">
+                        {mode === "compare" && compareLoading
+                          ? "두 리포트 PDF를 읽어 비교 프롬프트를 만드는 중이에요"
+                          : `완성 프롬프트 ${prompt.length.toLocaleString()}자`}
                       </div>
+                      <textarea
+                        readOnly
+                        value={prompt}
+                        className="h-56 w-full resize-y rounded-xl bg-white p-3.5 font-mono text-[12px] leading-relaxed text-g700 outline-none ring-1 ring-g200"
+                      />
                     </div>
                   )}
 
-                  {tab === "ai" && (
-                    <div className="mt-3 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={runAi}
-                          disabled={aiLoading}
-                          className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
-                        >
-                          {aiLoading
-                            ? "분석 중…"
-                            : aiText
-                              ? "다시 분석"
-                              : `${MODE_META[mode].title} AI 분석 시작`}
-                        </button>
-                        {aiLoading && (
-                          <button
-                            onClick={() => abortRef.current?.abort()}
-                            className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                          >
-                            중지
-                          </button>
-                        )}
-                        <span className="text-xs text-slate-400">
-                          {mode === "trade"
-                            ? "웹검색으로 최신가 보강"
-                            : mode === "counter"
-                              ? `${data.counterLens.name} 렌즈로 재검증`
-                              : mode === "compare"
-                                ? `${prevReport?.date ?? "?"} 리포트 대비`
-                                : "모듈 1~5 + 확신도·상승여력"}
-                          {aiModel ? ` · ${aiModel}` : ""}
-                        </span>
+                  {aiErr && <div className="mt-4 rounded-2xl bg-to-50 p-4 text-[15px] text-orange-800">{aiErr}</div>}
+
+                  {aiLoading && !aiText && (
+                    <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-g50 p-4 text-[15px] text-g600">
+                      <Spinner /> PDF 원본을 읽고 있어요. 첫 글자까지 10초쯤 걸려요.
+                    </div>
+                  )}
+
+                  {aiText && (
+                    <div className="mt-6 border-t border-g100 pt-6">
+                      <div className="md">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiText}</ReactMarkdown>
                       </div>
-
-                      {!aiText && !aiLoading && !aiErr && (
-                        <p className="rounded-xl bg-slate-50 p-3.5 text-[13px] leading-relaxed text-slate-500">
-                          버튼을 누르면 PDF 원본(표·차트 포함)을 직접 읽고, 작성
-                          애널 렌즈 분석에 더해 확신도(필독/참고/패스)와 내재
-                          상승여력까지 보여줘요. 복사·붙여넣기가 필요 없어요.
-                          (호출당 소액 비용 발생)
-                        </p>
-                      )}
-
-                      {aiErr && (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
-                          {aiErr}
-                        </div>
-                      )}
-
-                      {aiLoading && !aiText && (
-                        <div className="flex items-center gap-2 rounded-xl bg-violet-50 p-3.5 text-[13px] text-violet-700">
-                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-200 border-t-violet-600" />
-                          PDF 원본(표·차트 포함)을 읽는 중… 첫 글자까지 10~30초
-                          걸릴 수 있어요.
-                        </div>
-                      )}
-
-                      {aiText && (
-                        <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-                          <div className="md">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {aiText}
-                            </ReactMarkdown>
-                          </div>
-                          {aiLoading && (
-                            <span className="mt-2 inline-block h-3 w-3 animate-pulse rounded-full bg-violet-400 align-middle" />
-                          )}
-                        </div>
-                      )}
+                      {aiLoading && <span className="mt-2 inline-block h-3 w-3 animate-pulse rounded-full bg-tb align-middle" />}
+                      {aiModel && !aiLoading && <p className="mt-4 text-[12px] text-g400">{aiModel}</p>}
                     </div>
                   )}
                 </div>
-              </section>
-            </>
-          )}
-        </div>
+              )))}
+        </section>
       </aside>
     </div>
   );

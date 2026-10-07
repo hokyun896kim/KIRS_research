@@ -2,158 +2,106 @@
 
 import { useState } from "react";
 import type { Profile } from "@/lib/profiles";
-import { Avatar } from "./ui";
+import type { AnalystSummary } from "@/lib/types";
+import { Avatar, pct, retTone } from "./ui";
 
-export function stanceColor(stance?: string): string {
-  if (!stance) return "bg-slate-100 text-slate-700 border-slate-200";
-  if (stance.startsWith("구조확신"))
-    return "bg-blue-50 text-blue-700 border-blue-200";
-  if (stance.startsWith("조건부"))
-    return "bg-amber-50 text-amber-700 border-amber-200";
-  if (stance.startsWith("발굴소개"))
-    return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (stance.startsWith("턴어라운드"))
-    return "bg-orange-50 text-orange-700 border-orange-200";
-  if (stance.startsWith("이벤트"))
-    return "bg-violet-50 text-violet-700 border-violet-200";
-  return "bg-slate-100 text-slate-700 border-slate-200";
-}
+// 채점 리포트가 이보다 적으면 성과 숫자를 보여주지 않는다 (1~2건짜리 -67% 같은 숫자는 오해를 부름)
+export const MIN_TRACK_N = 5;
 
-export function stanceDot(stance?: string): string {
-  if (!stance) return "bg-slate-300";
-  if (stance.startsWith("구조확신")) return "bg-blue-500";
-  if (stance.startsWith("조건부")) return "bg-amber-500";
-  if (stance.startsWith("발굴소개")) return "bg-emerald-500";
-  if (stance.startsWith("턴어라운드")) return "bg-orange-500";
-  if (stance.startsWith("이벤트")) return "bg-violet-500";
-  return "bg-slate-300";
-}
-
-// 스탠스 계열별 왼쪽 강조선 색
-function stanceBar(stance?: string): string {
-  if (!stance) return "bg-slate-300";
-  if (stance.startsWith("구조확신")) return "bg-blue-500";
-  if (stance.startsWith("조건부")) return "bg-amber-400";
-  if (stance.startsWith("발굴소개")) return "bg-emerald-500";
-  if (stance.startsWith("턴어라운드")) return "bg-orange-500";
-  if (stance.startsWith("이벤트")) return "bg-violet-500";
-  return "bg-slate-300";
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[11px] font-semibold tracking-wide text-slate-400">
-        {label}
-      </div>
-      <div className="mt-0.5 text-[13px] leading-snug text-slate-700">
-        {children}
-      </div>
+    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-3 py-2.5">
+      <dt className="text-[14px] text-g500">{label}</dt>
+      <dd className="text-[15px] leading-relaxed text-g800">{children}</dd>
     </div>
   );
 }
 
+// 애널 프로필 카드. collapsible이면 원퀘스천·한 줄 지침만 보이고 펼쳐서 자세히 본다.
 export default function AnalystCard({
   p,
   role,
   collapsible,
+  track,
+  footer,
 }: {
   p: Profile;
   role?: string;
   collapsible?: boolean;
+  track?: AnalystSummary;
+  footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!collapsible);
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 pl-5 shadow-card">
-      <span
-        className={`absolute inset-y-0 left-0 w-1.5 ${stanceBar(p.stance)}`}
-      />
-      <div className="flex items-start gap-3">
+    <div className="rounded-3xl bg-white p-5 ring-1 ring-g100">
+      <div className="flex items-center gap-3.5">
         <Avatar name={p.name} stance={p.stance} size="lg" />
         <div className="min-w-0 flex-1">
+          {role && <div className="text-[13px] font-medium text-g500">{role}</div>}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {role && (
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-                {role}
-              </span>
-            )}
-            <span className="text-[17px] font-extrabold tracking-tight text-slate-900">
-              {p.name}
-            </span>
-            <span
-              className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${stanceColor(p.stance)}`}
-            >
-              {p.type}
-            </span>
-            {p.warn && (
-              <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
-                ⚠ 공동작성 영향 큼(관찰)
-              </span>
-            )}
+            <span className="text-[18px] font-bold tracking-tight text-g900">{p.name}</span>
+            <span className="text-[14px] text-g600">{p.type}</span>
+            {p.warn && <span className="rounded-md bg-to-50 px-1.5 py-0.5 text-[12px] font-semibold text-orange-700">표본 적음</span>}
           </div>
-          <div className="mt-1.5 text-[14px] font-semibold text-slate-700">
-            💬 “{p.oneQuestion}”
-          </div>
-          {!open && (
-            <div className="mt-1 text-[12.5px] text-slate-500">{p.guide}</div>
-          )}
         </div>
-        {collapsible && (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-          >
-            {open ? "접기 ▴" : "프로필 자세히 ▾"}
-          </button>
-        )}
       </div>
 
-      {open && (
-        <div className="mt-3.5 grid grid-cols-1 gap-x-5 gap-y-3 border-t border-slate-100 pt-3.5 sm:grid-cols-2">
-          <Field label="스탠스">{p.stance}</Field>
-          <Field label="한 줄 지침">{p.guide}</Field>
-          <Field label="강점">{p.strength}</Field>
-          <Field label="주의·검증">{p.caution}</Field>
-          <div className="sm:col-span-2">
-            <Field label="문법·키워드">{p.keyword}</Field>
+      <p className="mt-4 text-[17px] font-semibold leading-snug text-g900">“{p.oneQuestion}”</p>
+      <p className="mt-1.5 text-[15px] leading-relaxed text-g600">{p.guide}</p>
+
+      {track && track.n6 >= MIN_TRACK_N && (
+        <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-g50 p-3.5 text-center">
+          <div>
+            <div className="text-[12px] text-g500">6개월 평균</div>
+            <div className={`num mt-0.5 text-[16px] font-bold ${retTone(track.avg6)}`}>{pct(track.avg6)}</div>
           </div>
-          <div className="sm:col-span-2">
-            <Field label="강한 섹터">
-              <div className="mt-1 flex flex-wrap gap-1">
-                {p.sectors.map((s) => (
-                  <span
-                    key={s}
-                    className="rounded-full bg-slate-100 px-2 py-0.5 text-[12px] text-slate-600"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </Field>
+          <div>
+            <div className="text-[12px] text-g500">시장 이긴 비율</div>
+            <div className="num mt-0.5 text-[16px] font-bold text-g900">{(track.win6 * 100).toFixed(0)}%</div>
           </div>
-          <div className="sm:col-span-2">
-            <Field label="주요 신호 (이렇게 쓰면 → 이렇게 읽어라)">
-              <ul className="mt-0.5 space-y-1">
-                {p.signals.map((s, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-1.5 text-[12.5px] leading-snug"
-                  >
-                    <span className="text-slate-300">•</span>
-                    <span>{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </Field>
+          <div>
+            <div className="text-[12px] text-g500">채점 리포트</div>
+            <div className="num mt-0.5 text-[16px] font-bold text-g900">{track.n6}건</div>
           </div>
         </div>
       )}
+
+      {open && (
+        <dl className="mt-3 divide-y divide-g100">
+          <Row label="스탠스">{p.stance}</Row>
+          <Row label="강점">{p.strength}</Row>
+          <Row label="주의·검증">{p.caution}</Row>
+          <Row label="문법">{p.keyword}</Row>
+          <Row label="강한 섹터">
+            <div className="flex flex-wrap gap-1.5">
+              {p.sectors.map((s) => (
+                <span key={s} className="rounded-lg bg-g100 px-2 py-0.5 text-[13px] text-g700">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </Row>
+          <Row label="신호 읽기">
+            <ul className="space-y-1.5">
+              {p.signals.map((s, i) => (
+                <li key={i} className="text-[14px] leading-relaxed text-g700">
+                  {s}
+                </li>
+              ))}
+            </ul>
+          </Row>
+        </dl>
+      )}
+
+      {collapsible && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="press mt-4 h-11 w-full rounded-xl bg-g100 text-[14px] font-semibold text-g700 hover:bg-g200"
+        >
+          {open ? "접기" : "프로필 자세히 보기"}
+        </button>
+      )}
+      {footer}
     </div>
   );
 }

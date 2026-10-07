@@ -31,3 +31,14 @@ export type ExtractResponse = {
   counterLens: Profile; // 반론모드 렌즈 (요청한 lens 또는 기본 짝)
   promptCounter: string;
 };
+
+// 목록 화면용 브리핑 요약 (/api/briefs)
+export type BriefSummary = {
+  verdict: "필독" | "참고" | "패스";
+  priority: "상" | "중" | "하";
+  positiveOdds: number;
+  conviction: number;
+  headline: string;
+};
+export type AnalystSummary = { avg6: number; win6: number; n6: number }; // 6개월 시장 대비 초과수익
+export type BriefsResponse = { briefs: Record<string, BriefSummary>; analysts: Record<string, AnalystSummary> };

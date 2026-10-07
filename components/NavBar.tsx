@@ -8,37 +8,37 @@ const LINKS = [
   { href: "/scorecard", label: "애널 성적표" },
 ];
 
+// 렌즈 모양 로고 (파란 원 + 손잡이)
+function Logo() {
+  return (
+    <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden>
+      <rect width="28" height="28" rx="8" fill="#3182f6" />
+      <circle cx="12.5" cy="12.5" r="5.5" fill="none" stroke="#fff" strokeWidth="2.6" />
+      <path d="M16.6 16.6 21 21" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function NavBar() {
   const path = usePathname();
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4">
-        <Link href="/" className="flex min-w-0 items-center gap-2.5">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-extrabold text-white shadow-sm">
-            K
-          </span>
-          <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">
-            KIRS 렌즈
-            <span className="ml-1.5 hidden text-xs font-medium text-slate-400 sm:inline">
-              애널리스트별 리포트 분석기
-            </span>
-          </span>
+    <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-6 px-5">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          <Logo />
+          <span className="text-[17px] font-bold tracking-tight text-g900">KIRS 렌즈</span>
         </Link>
-        <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-sm">
+        <div className="flex items-center gap-5 text-[15px]">
           {LINKS.map((l) => {
-            const active =
-              l.href === "/" ? path === "/" : path.startsWith(l.href);
+            const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
-                  active
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`relative py-4 font-semibold transition ${active ? "text-g900" : "text-g500 hover:text-g800"}`}
               >
                 {l.label}
+                {active && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-g900" />}
               </Link>
             );
           })}
