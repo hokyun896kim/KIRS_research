@@ -104,13 +104,15 @@ export function buildPrompt(i: PromptInput): string {
         `    · 원퀘스천: ${profile.oneQuestion}`,
         `    · 한 줄 지침: ${profile.guide}`,
         `    · 문법·키워드: ${profile.keyword}`,
+        `    · 강점: ${profile.strength}`,
         `    · 주의/검증: ${profile.caution}`,
+        `    · 읽기 신호: ${profile.signals.join(" / ")}`,
       ].join("\n")
-    : "- 적용 프로파일: (DB 미등록 — STEP 0.2에 따라 문법·키워드로 14인 중 유사 유형 추정 후 임시 프로파일 생성)";
+    : "- 적용 프로파일: (DB 미등록 — STEP 0.2에 따라 문법·키워드로 16인 중 유사 유형 추정 후 임시 프로파일 생성)";
 
   const raLine = ra
     ? raProfile
-      ? `- 보조렌즈(RA): ${raProfile.name} — ${raProfile.type} / 원퀘스천: ${raProfile.oneQuestion}`
+      ? `- 보조렌즈(RA): ${raProfile.name} — ${raProfile.type} / 원퀘스천: ${raProfile.oneQuestion} / 읽기 신호: ${raProfile.signals.join(" / ")}`
       : `- 보조렌즈(RA): ${ra} (DB 미등록)`
     : null;
 
@@ -120,9 +122,9 @@ export function buildPrompt(i: PromptInput): string {
       : "- 출력 모드: 풀모드 — 모듈 1~5 전부.";
 
   const stepLine = profile
-    ? "위 작성자를 STEP 0 규칙으로 식별했고, STEP 1의 14인 표에서 해당 행을 주렌즈로 적용합니다." +
+    ? "위 작성자를 STEP 0 규칙으로 식별했고, STEP 1의 애널 표에서 해당 행을 주렌즈로 적용합니다." +
       (coAuthored ? " 공동작성(주렌즈+보조렌즈)이며, 표본/공동작성 영향이 크면 ⚠관찰프로파일로 처리하세요." : "")
-    : "위 작성자를 STEP 0 규칙으로 식별했고, STEP 1의 14인 표에서 해당 행을 추정 적용합니다.";
+    : "위 작성자를 STEP 0 규칙으로 식별했고, STEP 1의 애널 표에서 해당 행을 추정 적용합니다.";
 
   const SEP = "─".repeat(34);
 
@@ -201,6 +203,7 @@ export function buildCounterPrompt(i: CounterPromptInput): string {
     `    · 강점: ${lens.strength}`,
     `    · 주의/검증: ${lens.caution}`,
     `    · 문법·키워드: ${lens.keyword}`,
+    `    · 읽기 신호: ${lens.signals.join(" / ")}`,
     `- 출력 모드: 반론모드`,
     ...contextLines(i.context, analyst ?? report.author),
     ``,

@@ -127,7 +127,7 @@ export default function ScorecardView() {
                     onlyProfiled ? "bg-g800 text-white" : "bg-g100 text-g700"
                   }`}
                 >
-                  도감 14인만
+                  도감 16인만
                 </button>
               }
             >

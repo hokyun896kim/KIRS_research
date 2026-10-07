@@ -22,7 +22,7 @@ export default function AnalystGuide({ onClose, onPick }: { onClose: () => void;
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-[22px] font-bold tracking-tight text-g900">애널리스트 도감</h2>
-              <p className="mt-1 text-[14px] text-g500">14명이 무엇을 보고, 어디를 조심해서 읽어야 하는지 정리했어요.</p>
+              <p className="mt-1 text-[14px] text-g500">16명이 무엇을 보고, 어디를 조심해서 읽어야 하는지 리포트 121건을 읽고 정리했어요.</p>
             </div>
             <button
               onClick={onClose}
