@@ -6,7 +6,7 @@ import { findSameCompany } from "./history";
 // 성적·이력은 "그 리포트 발간일에 알 수 있었던 것"만 쓴다 — 과거 리포트를 판정할 때 미래 결과가 새지 않게.
 export type AnalysisContext = {
   today: string; // YYYY-MM-DD (KST)
-  trackRecord: string | null;
+  trackRecord: string | null; // "" = 결과가 확정된 리포트가 적어 보정 생략, null = 조회 실패
   history: string[] | null; // 이전 리포트 (최신순), null이면 조회 실패
 };
 
@@ -34,19 +34,19 @@ const dayNum = (d: string) => {
 };
 
 function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T | null> {
-  const t0 = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     p.catch((e) => {
-      console.warn(`[analysis-context] ${label} failed after ${Date.now() - t0}ms: ${(e as Error).message}`);
+      console.warn(`[analysis-context] ${label} failed: ${(e as Error).message}`);
       return null;
     }),
-    new Promise<null>((r) =>
-      setTimeout(() => {
+    new Promise<null>((r) => {
+      timer = setTimeout(() => {
         console.warn(`[analysis-context] ${label} timed out after ${ms}ms`);
         r(null);
-      }, ms)
-    ),
-  ]);
+      }, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 async function trackRecordOf(author: string, asOf: string): Promise<string | null> {
@@ -64,7 +64,7 @@ async function trackRecordOf(author: string, asOf: string): Promise<string | nul
     const win = ex.filter((v) => v > 0).length / ex.length;
     parts.push(`${h} 평균 ${pct(avg)} · 중앙값 ${pct(median(ex))} · 승률 ${(win * 100).toFixed(0)}% (n=${ex.length})`);
   }
-  return parts.length ? parts.join(" / ") : null;
+  return parts.join(" / ");
 }
 
 async function historyOf(code: string | null, name: string, date: string, title: string): Promise<string[]> {
@@ -75,7 +75,8 @@ async function historyOf(code: string | null, name: string, date: string, title:
     .map((r) => `${r.date} · ${r.author} · "${r.title}"`);
 }
 
-// 실패하거나 느리면(캐시가 식은 경우) 해당 항목만 빼고 진행한다
+// 실패하거나 느리면(캐시가 식은 경우) 해당 항목만 빼고 진행한다.
+// PDF 파싱처럼 CPU를 오래 잡는 작업과 동시에 돌리면 타이머가 먼저 터지므로, 호출 쪽에서 PDF보다 먼저 끝내 둘 것.
 export async function getAnalysisContext(
   r: { author: string; code: string | null; name: string; date: string; title: string },
   timeoutMs = 8000

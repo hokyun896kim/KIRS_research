@@ -33,13 +33,21 @@ function contextLines(c: AnalysisContext | undefined, author: string): string[] 
   if (!c) return [];
   return [
     `- 오늘 날짜: ${c.today}`,
-    c.trackRecord
-      ? `- ${author} 리포트의 과거 성과 (발간일 종가 → 소속 시장 대비 초과수익, 이 리포트 발간일 전에 결과가 확정된 것만): ${c.trackRecord}`
-      : `- ${author} 리포트의 과거 성과: 표본 부족 또는 조회 실패 — 성과 보정 없이 프로파일로만 판단`,
+    // 조회 실패(null)면 줄을 아예 뺀다 — "표본 부족"을 프로파일 표본 부족으로 오독하는 일이 있었다
+    ...(c.trackRecord
+      ? [
+          `- ${author}의 과거 리포트 성과 (발간일 종가 → 소속 시장 대비 초과수익, 이 리포트 발간일 전에 결과가 확정된 것만): ${c.trackRecord}`,
+        ]
+      : c.trackRecord === ""
+        ? [`- ${author}의 과거 리포트 성과: 결과가 확정된 리포트가 3건 미만이라 성과 보정은 생략 (프로파일 판단과는 무관)`]
+        : []),
     ...(c.history == null
       ? []
       : c.history.length
-        ? [`- 이 종목의 이전 KIRS 리포트 (제목만 제공, 내용 추측 금지):`, ...c.history.map((h) => `    · ${h}`)]
+        ? [
+            `- 이 종목(작성자 무관)의 이전 KIRS 리포트 — 제목만 제공, 내용 추측 금지:`,
+            ...c.history.map((h) => `    · ${h}`),
+          ]
         : [`- 이 종목의 이전 KIRS 리포트: 없음 (이번이 첫 커버리지)`]),
   ];
 }

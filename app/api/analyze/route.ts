@@ -27,6 +27,7 @@ type Body = Side & {
   mode?: Mode;
   lens?: string; // 반론모드 렌즈 애널 이름
   model?: string; // 비교 테스트용 (ALT_MODELS)
+  thinking?: "off"; // 비교 테스트용: 모델 기본 사고를 끈다
   prev?: Side; // 비교모드: 이전 리포트
 };
 
@@ -45,11 +46,9 @@ export async function POST(req: NextRequest) {
   let prompt: string;
   let pdfs: { data: string; title: string }[] = [];
   try {
-    // 비교모드는 두 리포트를 직접 맞대므로 성적·이력 자료가 필요 없다
-    const [cur, context] = await Promise.all([
-      loadReport(b.url, report),
-      mode === "compare" ? Promise.resolve(undefined) : getAnalysisContext(report),
-    ]);
+    // 비교모드는 두 리포트를 직접 맞대므로 성적·이력 자료가 필요 없다. PDF 파싱보다 먼저 끝낸다 (analysis-context.ts)
+    const context = mode === "compare" ? undefined : await getAnalysisContext(report);
+    const cur = await loadReport(b.url, report);
     if (mode === "compare") {
       const prevMeta = metaFrom((k) => b.prev?.[k as keyof ReportMeta] as string | null | undefined);
       const prev = await loadReport(b.prev!.url!, prevMeta);
@@ -90,6 +89,7 @@ export async function POST(req: NextRequest) {
   const stream = client.messages.stream({
     model,
     max_tokens: 32000,
+    ...(b.thinking === "off" ? { thinking: { type: "disabled" as const } } : {}),
     // 적응형 사고는 끈다: PDF 원본 + 긴 지시에서 사고만으로 Hobby 함수 한도(300초)를 넘겨 첫 글자도 못 내보냈다.
     messages: [
       {

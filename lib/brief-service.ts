@@ -20,7 +20,8 @@ async function context(report: ReportMeta) {
 
 // 브리핑을 새로 만들어 저장한다 (판정은 "AI 판정 검증"에도 brief 모드로 쌓음)
 export async function createBrief(no: string, url: string, report: ReportMeta): Promise<CachedBrief> {
-  const [L, ctx] = await Promise.all([loadReport(url, report), context(report)]);
+  const ctx = await context(report); // PDF 파싱보다 먼저 (analysis-context.ts)
+  const L = await loadReport(url, report);
   const d = report.date.match(/(\d{4})-(\d{2})-(\d{2})/);
   const daysSince = d ? Math.floor((Date.now() - new Date(+d[1], +d[2] - 1, +d[3]).getTime()) / 86400000) : null;
   const brief = await generateBrief(

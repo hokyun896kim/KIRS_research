@@ -26,8 +26,9 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    // 복붙 프롬프트에도 성적·이력을 넣되, 캐시가 식어 느리면 빼고 바로 응답
-    const [{ pages, text }, context] = await Promise.all([extractPdf(url), getAnalysisContext(report, 4000)]);
+    // 복붙 프롬프트에도 성적·이력을 넣되, 캐시가 식어 느리면 빼고 바로 응답. PDF 파싱보다 먼저 (analysis-context.ts)
+    const context = await getAnalysisContext(report, 4000);
+    const { pages, text } = await extractPdf(url);
     const { analyst, ra } = detectAuthors(text);
     const profile = matchProfile(analyst ?? report.author);
     const raProfile = ra ? matchProfile(ra) : undefined;
