@@ -121,7 +121,7 @@ export default function VerdictCheck({
             checked={all}
             onChange={(e) => setAll(e.target.checked)}
           />
-          {stats?.fairSince ?? "2025-09-01"} 이전 리포트 포함{" "}
+          {stats?.fairSince ?? "2026-07-01"} 이전 리포트 포함{" "}
           <span className="text-slate-400">(오염 가능)</span>
         </label>
       </div>

@@ -10,7 +10,8 @@ import { ANALYSIS_MODEL, THINKING_OFF } from "./model";
 // 실시간 분석과 같은 모델로 판정해야 "AI 판정 검증" 통계가 한 모델 기준이 된다
 export const BACKFILL_MODEL = ANALYSIS_MODEL;
 // 모델 학습 이후에 나온 리포트만 써야 "답을 알고 푸는" 오염을 피한다
-export const FAIR_SINCE = "2025-09-01";
+// Sonnet 5.5는 4.6보다 최근까지 학습해, 기준을 2025-09-01에서 2026-07-01로 늦췄다
+export const FAIR_SINCE = "2026-07-01";
 
 export type BackfillResult = {
   conviction: number;
