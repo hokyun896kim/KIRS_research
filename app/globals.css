@@ -1,52 +1,111 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f7f9;
-  --foreground: #15181d;
+  --background: #f3f4f7;
+  --foreground: #111827;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --shadow-card:
+    0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.06);
+  --shadow-pop: 0 24px 64px -12px rgb(15 23 42 / 0.28);
+  --animate-drawer-in: drawer-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-pop-in: pop-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop-in {
+  from {
+    transform: translateY(12px) scale(0.985);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui,
-    -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 숫자 자릿수 정렬 */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* 가로 스크롤 영역의 스크롤바 숨김 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* AI 자동분석 마크다운 출력 */
 .md {
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.75;
   color: #1f2937;
-  word-break: break-word;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .md h1,
 .md h2,
 .md h3 {
   font-weight: 700;
-  margin: 16px 0 6px;
+  margin: 22px 0 8px;
   line-height: 1.35;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 .md h1 {
-  font-size: 17px;
+  font-size: 19px;
 }
 .md h2 {
-  font-size: 15px;
+  font-size: 16.5px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
 }
 .md h3 {
-  font-size: 14px;
+  font-size: 15px;
 }
 .md p {
-  margin: 6px 0;
+  margin: 8px 0;
 }
 .md ul,
 .md ol {
-  margin: 6px 0;
-  padding-left: 18px;
+  margin: 8px 0;
+  padding-left: 20px;
 }
 .md ul {
   list-style: disc;
@@ -55,7 +114,7 @@ body {
   list-style: decimal;
 }
 .md li {
-  margin: 2px 0;
+  margin: 3px 0;
 }
 .md strong {
   font-weight: 700;
@@ -65,31 +124,42 @@ body {
   background: #f1f5f9;
   padding: 1px 5px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .md hr {
   border: 0;
-  border-top: 1px solid #e2e8f0;
-  margin: 12px 0;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0;
 }
 .md table {
+  display: block;
+  overflow-x: auto;
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 10px 0;
   width: 100%;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
 }
 .md th,
 .md td {
-  border: 1px solid #e2e8f0;
-  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
   text-align: left;
+  vertical-align: top;
 }
 .md th {
   background: #f8fafc;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.md tr:nth-child(even) td {
+  background: #fcfcfd;
 }
 .md blockquote {
-  border-left: 3px solid #cbd5e1;
-  padding-left: 10px;
+  border-left: 3px solid #c7d2fe;
+  background: #f5f7ff;
+  padding: 6px 12px;
   color: #475569;
-  margin: 8px 0;
+  margin: 10px 0;
+  border-radius: 0 6px 6px 0;
 }
