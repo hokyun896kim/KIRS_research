@@ -431,13 +431,13 @@ export default function ReportDetail({
               (data && (
                 <div className="space-y-3">
                   {data.profile ? (
-                    <AnalystCard p={data.profile} role="주렌즈 · 작성 애널" track={track[data.profile.name]} />
+                    <AnalystCard p={data.profile} role="주렌즈 · 작성 애널" />
                   ) : (
                     <div className="rounded-2xl bg-g50 p-4 text-[15px] text-g700">
                       도감에 없는 애널({data.analyst ?? "미상"})이에요. 분석 때는 문체로 가장 가까운 유형을 추정해 임시 프로필을 만들어요.
                     </div>
                   )}
-                  {data.raProfile && <AnalystCard p={data.raProfile} role="보조렌즈 · RA" track={track[data.raProfile.name]} collapsible />}
+                  {data.raProfile && <AnalystCard p={data.raProfile} role="보조렌즈 · RA" collapsible />}
                   <p className="num pt-1 text-[13px] text-g400">
                     PDF {data.pages ?? "?"}쪽 · 본문 {data.textLength.toLocaleString()}자
                   </p>
@@ -550,7 +550,7 @@ export default function ReportDetail({
                         </select>
                         {lensLoading && <Spinner />}
                       </label>
-                      <AnalystCard p={data.counterLens} role="이 사람 눈으로 다시 읽어요" collapsible track={track[data.counterLens.name]} />
+                      <AnalystCard p={data.counterLens} role="이 사람 눈으로 다시 읽어요" collapsible />
                     </div>
                   )}
 

@@ -42,3 +42,14 @@ export type BriefSummary = {
 };
 export type AnalystSummary = { avg6: number; win6: number; n6: number }; // 6개월 시장 대비 초과수익
 export type BriefsResponse = { briefs: Record<string, BriefSummary>; analysts: Record<string, AnalystSummary> };
+
+// 애널 사실 정보 (/api/analysts)
+export type PerfStat = { n: number; avg: number; win: number } | null;
+export type AnalystFacts = {
+  reports: number;
+  first: string;
+  last: string;
+  active: boolean; // 최근 180일 안에 리포트가 있음
+  sectors: { label: string; share: number }[];
+  perf: { "3M": PerfStat; "6M": PerfStat; "12M": PerfStat };
+};

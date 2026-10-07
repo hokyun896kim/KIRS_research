@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { Profile } from "@/lib/profiles";
-import type { AnalystSummary } from "@/lib/types";
+import type { AnalystFacts } from "@/lib/types";
 import { Avatar, pct, retTone } from "./ui";
+import { useAnalystFacts } from "./useAnalystFacts";
 
 // 채점 리포트가 이보다 적으면 성과 숫자를 보여주지 않는다 (1~2건짜리 -67% 같은 숫자는 오해를 부름)
 export const MIN_TRACK_N = 5;
@@ -22,16 +23,15 @@ export default function AnalystCard({
   p,
   role,
   collapsible,
-  track,
   footer,
 }: {
   p: Profile;
   role?: string;
   collapsible?: boolean;
-  track?: AnalystSummary;
   footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!collapsible);
+  const facts = useAnalystFacts()[p.name];
   return (
     <div className="rounded-3xl bg-white p-5 ring-1 ring-g100">
       <div className="flex items-center gap-3.5">
@@ -49,22 +49,7 @@ export default function AnalystCard({
       <p className="mt-4 text-[17px] font-semibold leading-snug text-g900">“{p.oneQuestion}”</p>
       <p className="mt-1.5 text-[15px] leading-relaxed text-g600">{p.guide}</p>
 
-      {track && track.n6 >= MIN_TRACK_N && (
-        <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-g50 p-3.5 text-center">
-          <div>
-            <div className="text-[12px] text-g500">6개월 평균</div>
-            <div className={`num mt-0.5 text-[16px] font-bold ${retTone(track.avg6)}`}>{pct(track.avg6)}</div>
-          </div>
-          <div>
-            <div className="text-[12px] text-g500">시장 이긴 비율</div>
-            <div className="num mt-0.5 text-[16px] font-bold text-g900">{(track.win6 * 100).toFixed(0)}%</div>
-          </div>
-          <div>
-            <div className="text-[12px] text-g500">채점 리포트</div>
-            <div className="num mt-0.5 text-[16px] font-bold text-g900">{track.n6}건</div>
-          </div>
-        </div>
-      )}
+      {facts && <FactsBlock f={facts} />}
 
       {open && (
         <dl className="mt-3 divide-y divide-g100">
@@ -102,6 +87,56 @@ export default function AnalystCard({
         </button>
       )}
       {footer}
+    </div>
+  );
+}
+
+const ym = (d: string) => d.slice(0, 7).replace("-", ".");
+
+// 데이터로 계산한 기록: 리포트 수·활동 기간·주력 섹터·기간별 성과
+function FactsBlock({ f }: { f: AnalystFacts }) {
+  const perf = (["3M", "6M", "12M"] as const).map((k) => ({ k, s: f.perf[k] }));
+  const showPerf = perf.some((x) => x.s && x.s.n >= MIN_TRACK_N);
+  return (
+    <div className="mt-4 rounded-2xl bg-g50 p-4">
+      <div className="num flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-g700">
+        <span className="font-semibold text-g900">리포트 {f.reports}건</span>
+        <span className="text-g400">·</span>
+        <span>
+          {ym(f.first)} ~ {ym(f.last)}
+        </span>
+        <span className={`rounded-md px-1.5 py-0.5 text-[12px] font-semibold ${f.active ? "bg-tb-50 text-tb" : "bg-g200 text-g600"}`}>
+          {f.active ? "활동 중" : "최근 활동 없음"}
+        </span>
+      </div>
+      {f.sectors.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {f.sectors.map((s) => (
+            <span key={s.label} className="num rounded-lg bg-white px-2 py-1 text-[13px] text-g700 ring-1 ring-g200">
+              {s.label} <span className="text-g500">{Math.round(s.share * 100)}%</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {showPerf && (
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          {perf.map(({ k, s }) => (
+            <div key={k} className="rounded-xl bg-white py-2.5">
+              <div className="text-[12px] text-g500">{k.replace("M", "개월")} 시장 대비</div>
+              {s && s.n >= MIN_TRACK_N ? (
+                <>
+                  <div className={`num mt-0.5 text-[16px] font-bold ${retTone(s.avg)}`}>{pct(s.avg)}</div>
+                  <div className="num text-[12px] text-g500">
+                    승률 {(s.win * 100).toFixed(0)}% · {s.n}건
+                  </div>
+                </>
+              ) : (
+                <div className="mt-1 text-[13px] text-g400">표본 부족</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
