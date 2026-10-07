@@ -71,7 +71,7 @@ export default function BriefCard({ report }: { report: Report }) {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-            리포트를 읽고 냉정하게 판단하는 중… 처음 한 번만 20초쯤 걸리고, 이후엔 바로 떠요.
+            리포트를 읽고 냉정하게 판단하는 중… 처음 여는 리포트는 1분 정도 걸리고, 이후엔 바로 떠요. (최근 2주 리포트는 매일 아침 미리 만들어 둡니다)
           </div>
           <div className="h-3 w-3/4 animate-pulse rounded bg-slate-200" />
           <div className="h-3 w-1/2 animate-pulse rounded bg-slate-200" />

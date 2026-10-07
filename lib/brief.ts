@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Profile } from "./profiles";
 import type { ReportMeta } from "./report-input";
 
-// 팝업 상단 "바이사이드 냉정 브리핑": 리포트당 한 번 생성해 Blob에 캐시한다.
+// 팝업 상단 "바이사이드 냉정 브리핑" 프롬프트·스키마. 생성·캐시는 brief-service.ts
 export const BRIEF_MODEL = "claude-sonnet-4-6";
 
 export type Brief = {
